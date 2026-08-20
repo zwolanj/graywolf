@@ -1076,6 +1076,9 @@ func normalizeKissInterface(k *KissInterface) error {
 		if KissTypeDefaultsTnc(k.InterfaceType) {
 			k.Mode = KissModeTnc
 			k.AllowTxFromGovernor = true
+		} else if k.InterfaceType == KissTypeBLEMobilinkd {
+			// BLE TNC always owns the modem; mode is always tnc.
+			k.Mode = KissModeTnc
 		} else {
 			k.Mode = KissModeModem
 		}
