@@ -183,6 +183,7 @@
   .app-layout {
     display: flex;
     min-height: 100vh;
+    justify-content: center;
   }
   .main-content {
     flex: 1;
