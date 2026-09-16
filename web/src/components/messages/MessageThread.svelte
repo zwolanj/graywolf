@@ -437,8 +437,7 @@
     </EmptyState>
   </div>
 {:else}
-  <section class="thread-pane" data-testid="thread-pane">
-    <ThreadHeader
+  <ThreadHeader
       {thread}
       {isTactical}
       {isMobile}
@@ -447,6 +446,8 @@
       onOpenDm={replyPrivately}
       onActionsToggle={!isTactical ? () => (actionsDrawerOpen = !actionsDrawerOpen) : undefined}
     />
+  <section class="thread-pane" data-testid="thread-pane">
+    
 
     <div class="scroll-wrap">
       <div
@@ -504,7 +505,9 @@
       {/if}
     </div>
 
-    <ComposeBar
+    
+  </section>
+  <ComposeBar
       mode="thread"
       {isTactical}
       tacticalKey={isTactical ? thread.key : ''}
@@ -514,7 +517,6 @@
       onSend={handleSend}
       autoFocus={true}
     />
-  </section>
 
   <MessageContextMenu
     bind:open={menuOpen}
