@@ -2195,7 +2195,7 @@ client (a monitoring app that stopped draining its socket, or a dead TCP
 peer) could block `net.Conn.Write` indefinitely, stalling every
 subsequent RF frame system-wide regardless of its source -- a plausible
 independent contributor to the same "RF packets stop" class of report as
-invariant 68.
+invariant 71.
 
 Corollary: any new per-connection write path added to `kiss.Server` (RX
 echo, TX broadcast, or otherwise) must set a bounded write deadline the
