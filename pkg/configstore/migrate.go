@@ -256,6 +256,7 @@ var schemaMigrations = []migration{
 	{version: 30, name: "kiss_serial_tnc_default", phase: postAutoMigrate, run: migrateKissSerialTncDefault},
 	{version: 31, name: "kiss_ble_device_type", phase: postAutoMigrate, run: migrateKissBLEDeviceType},
 	{version: 32, name: "beacon_qsy_tone_freq", phase: postAutoMigrate, run: migrateBeaconQsyToneFreq},
+	{version: 33, name: "kiss_link_watchdog", phase: postAutoMigrate, run: migrateKissLinkWatchdog},
 }
 
 // runMigrations applies every pending migration in the given phase,

@@ -2103,6 +2103,8 @@ func (a *App) kissComponent() namedComponent {
 						AllowTxFromGovernor: ki.AllowTxFromGovernor,
 						AllowConnectedMode:  ki.AllowConnectedMode,
 						GateTxToIs:          ki.GateTxToIs,
+						LinkWatchdog:        ki.LinkWatchdog,
+						IdleReconnectSec:    ki.IdleReconnectSec,
 						OnReload:            a.notifyTxBackendReload,
 						OpenFunc:            a.kissSerialOpenFunc(),
 					})
@@ -2128,6 +2130,9 @@ func (a *App) kissComponent() namedComponent {
 						AllowTxFromGovernor: ki.AllowTxFromGovernor,
 						AllowConnectedMode:  ki.AllowConnectedMode,
 						GateTxToIs:          ki.GateTxToIs,
+						Bluetooth:           true,
+						LinkWatchdog:        ki.LinkWatchdog,
+						IdleReconnectSec:    ki.IdleReconnectSec,
 						OnReload:            a.notifyTxBackendReload,
 						OpenFunc:            a.kissSerialOpenFunc(),
 					})
@@ -2154,6 +2159,8 @@ func (a *App) kissComponent() namedComponent {
 						AllowTxFromGovernor: ki.AllowTxFromGovernor,
 						AllowConnectedMode:  ki.AllowConnectedMode,
 						GateTxToIs:          ki.GateTxToIs,
+						LinkWatchdog:        ki.LinkWatchdog,
+						IdleReconnectSec:    ki.IdleReconnectSec,
 						OnReload:            a.notifyTxBackendReload,
 						OpenFunc:            a.kissSerialOpenFunc(),
 					})
@@ -2180,6 +2187,8 @@ func (a *App) kissComponent() namedComponent {
 						AllowTxFromGovernor: ki.AllowTxFromGovernor,
 						AllowConnectedMode:  ki.AllowConnectedMode,
 						GateTxToIs:          ki.GateTxToIs,
+						LinkWatchdog:        ki.LinkWatchdog,
+						IdleReconnectSec:    ki.IdleReconnectSec,
 						OnReload:            a.notifyTxBackendReload,
 						OpenFunc:            kiss.OpenBLEDevice,
 					})
