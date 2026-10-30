@@ -1,4 +1,4 @@
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+export JAVA_HOME=/opt/homebrew/opt/openjdk@25
 export PATH="$JAVA_HOME/bin:$PATH"
 
 export ANDROID_HOME=/Users/zwolanj/Library/Android/sdk

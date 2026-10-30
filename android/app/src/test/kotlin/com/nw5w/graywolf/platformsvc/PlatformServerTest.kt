@@ -24,7 +24,7 @@ class PlatformServerTest {
      * Reflection helpers so the unit-test source compiles against android.jar
      * (which lacks java.net.UnixDomainSocketAddress and the
      * SocketChannel.open(SocketAddress) overload) but uses the real classes
-     * at runtime under JDK 17.
+     * at runtime under JDK 25.
      */
     private fun unixSocketAddress(path: String): SocketAddress {
         val cls = Class.forName("java.net.UnixDomainSocketAddress")

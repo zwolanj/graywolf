@@ -224,7 +224,7 @@ class AudioTxPump(
         val emitTone = toneActive && o != null
         for (i in 0 until count) {
             stereoScratch[i * 2] = samples[i]
-            stereoScratch[i * 2 + 1] = if (emitTone) o!!.nextI16() else 0
+            stereoScratch[i * 2 + 1] = if (emitTone) o.nextI16() else 0
         }
         return t.write(stereoScratch, 0, count * 2, AudioTrack.WRITE_BLOCKING)
     }

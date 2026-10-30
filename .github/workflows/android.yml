@@ -58,11 +58,11 @@ jobs:
           # fixture generators) keeps working if we extend this job later.
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
 
       # Node is needed by the Gradle webBuild task, which runs
       # `npx vite build` to refresh web/dist before goCrossCompile
@@ -186,11 +186,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
 
       - name: Set up Node
         uses: actions/setup-node@v4

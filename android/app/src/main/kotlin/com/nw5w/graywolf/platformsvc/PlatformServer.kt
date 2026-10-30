@@ -50,7 +50,7 @@ class PlatformServer(
     @Volatile private var running = false
 
     @Volatile private var activeOutputs: List<OutputStream> = emptyList()
-    private val outputsLock = Object()
+    private val outputsLock = Any()
 
     @Volatile private var btSerialAdapter: BtSerialAdapter? = null
 
@@ -186,13 +186,13 @@ class PlatformServer(
 
     /**
      * Host-side unit-test startup. Uses java.net UDS APIs (JDK 16+) so
-     * the JUnit harness on JDK 17 can drive a real socket without an
+     * the JUnit harness on JDK 25 can drive a real socket without an
      * Android emulator. NEVER call from production code.
      *
      * Reflection is used so this file compiles against android.jar (API 28
      * stubs), which lacks java.net.UnixDomainSocketAddress and the
      * ServerSocketChannel.open(ProtocolFamily) overload. At runtime under
-     * the unit-test JVM (JDK 17) the real classes are available.
+     * the unit-test JVM (JDK 25) the real classes are available.
      */
     fun startForTest() {
         File(socketPath).delete()

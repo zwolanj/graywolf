@@ -108,6 +108,16 @@ remaining multi-string-notation warnings (`lint-gradle`, `aapt2`) are
 internal to AGP 8.13.x and go away only with the AGP 9 major upgrade,
 which was deliberately deferred.
 
+## Android JDK
+
+Gradle runs on JDK 25 (CI `actions/setup-java`, `android/build.sh`);
+`scripts/check-android-toolchain.sh` enforces JDK 21+. Bytecode target is
+Java 21 (`compileOptions` / `kotlin.compilerOptions.jvmTarget`). JDK 26+
+currently fails: AGP 8.13.x's `JdkImageTransform` builds a synthetic
+`java.base.jmod` that the newer `jlink` rejects ("cannot find the build
+signature"). Revisit with the AGP 9 upgrade. Mockito must stay >= 5.2x so
+ByteBuddy can read JDK 25 class files.
+
 ## OpenAPI lives in two places
 
 The swag-generated spec is committed to

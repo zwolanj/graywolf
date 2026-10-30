@@ -10,13 +10,13 @@ fail() {
     exit 1
 }
 
-# 1. JDK 17.
+# 1. JDK 21+ (CI builds with the latest, currently 25).
 if ! command -v java >/dev/null 2>&1; then
-    fail "java not on PATH; install JDK 17"
+    fail "java not on PATH; install JDK 21 or newer"
 fi
 JAVA_VERSION=$(java -version 2>&1 | head -n1 | awk -F\" '{print $2}' | awk -F. '{print $1}')
-if [[ "$JAVA_VERSION" != "17" ]]; then
-    fail "JDK $JAVA_VERSION found; need JDK 17"
+if [[ "$JAVA_VERSION" -lt 21 ]]; then
+    fail "JDK $JAVA_VERSION found; need JDK 21 or newer"
 fi
 
 # 2. Android NDK r27c+. ANDROID_NDK_ROOT or ANDROID_NDK_HOME must point at it.
@@ -64,4 +64,4 @@ if (( GO_MAJOR < 1 )) || (( GO_MAJOR == 1 && GO_MINOR < 23 )); then
     fail "Go $GO_VERSION; need 1.23+"
 fi
 
-echo "[check-android-toolchain] OK: JDK 17, NDK $NDK_REV, cargo-ndk $NDK_TOOL_VER, Go $GO_VERSION"
+echo "[check-android-toolchain] OK: JDK $JAVA_VERSION, NDK $NDK_REV, cargo-ndk $NDK_TOOL_VER, Go $GO_VERSION"
