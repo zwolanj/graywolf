@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.mock
@@ -122,7 +123,7 @@ class WebAppInterfaceTest {
         )
 
         val scriptCaptor = argumentCaptor<String>()
-        verify(wv).evaluateJavascript(scriptCaptor.capture(), any())
+        verify(wv).evaluateJavascript(scriptCaptor.capture(), anyOrNull())
         val script = scriptCaptor.firstValue
         assertTrue("script must contain callbackId", script.contains("cb-id"))
         assertTrue("script must contain false", script.contains("false"))
@@ -146,7 +147,7 @@ class WebAppInterfaceTest {
         )
 
         val scriptCaptor = argumentCaptor<String>()
-        verify(wv).evaluateJavascript(scriptCaptor.capture(), any())
+        verify(wv).evaluateJavascript(scriptCaptor.capture(), anyOrNull())
         val script = scriptCaptor.firstValue
         assertTrue("script must contain callbackId", script.contains("cb-id"))
         assertTrue("script must contain true", script.contains("true"))
@@ -164,7 +165,7 @@ class WebAppInterfaceTest {
         )
 
         verify(adapter, never()).requestPermissionFor(any(), any(), any())
-        verify(wv, never()).evaluateJavascript(any(), any())
+        verify(wv, never()).evaluateJavascript(any(), anyOrNull())
     }
 
     // -----------------------------------------------------------------------
