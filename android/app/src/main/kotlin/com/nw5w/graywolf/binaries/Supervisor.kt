@@ -16,6 +16,8 @@ class Supervisor(
     private var goWatcher: Thread? = null
     private var modemWatcher: Thread? = null
     private var restartLoop: Thread? = null
+    // java.lang.Object is required for wait()/notifyAll(), which kotlin.Any lacks.
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
     private val restartLock = Object()
     @Volatile private var failureSignalled = false
     @Volatile private var degraded = false

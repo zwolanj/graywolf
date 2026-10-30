@@ -34,6 +34,8 @@ class GoLauncher(
         }, "go-stderr").apply { isDaemon = true; start() }
 
         val ready = java.util.concurrent.atomic.AtomicBoolean(false)
+        // java.lang.Object is required here for wait()/notifyAll(), which kotlin.Any lacks.
+        @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
         val gate = Object()
         Thread({
             try {

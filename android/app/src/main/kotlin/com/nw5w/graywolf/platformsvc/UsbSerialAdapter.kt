@@ -86,7 +86,7 @@ class UsbSerialAdapter(
             return
         }
         val vidPid = req.address
-        val baud = req.baud.toInt()
+        val baud = req.baud
         scope.launch {
             val session = try {
                 facade.open(vidPid, baud)
