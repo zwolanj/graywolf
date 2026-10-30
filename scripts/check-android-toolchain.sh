@@ -6,7 +6,7 @@ set -euo pipefail
 
 fail() {
     echo "[check-android-toolchain] $1" >&2
-    echo "[check-android-toolchain] See docs/wiki/android-build.md for setup." >&2
+    echo "[check-android-toolchain] See docs/wiki/build-pipelines.md for setup." >&2
     exit 1
 }
 

@@ -1,4 +1,5 @@
 import com.google.protobuf.gradle.proto
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Base64
 
 // Read version metadata from the repo-root VERSION file so Android stays
@@ -82,10 +83,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     packaging {
         // N1: keep the lib*.so packaging trick alive so the Go ELF is extracted.
         jniLibs.useLegacyPackaging = true
@@ -150,6 +147,12 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 androidComponents {
     // Debug/release land in separate output dirs, so a shared name is safe.
     onVariants(selector().all()) { variant ->
@@ -185,6 +188,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
+    // Real org.json for host-JVM unit tests: the mockable android.jar stubs
+    // JSONArray/JSONObject with do-nothing defaults, silently breaking any
+    // test that round-trips JSON.
+    testImplementation("org.json:json:20260814")
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")

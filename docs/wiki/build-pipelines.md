@@ -92,6 +92,22 @@ naive config makes the two collide (same archive name, same
 else keeps `ConventionalFileName`). If you add another `goarm` value,
 update all three or artifacts will silently overwrite each other.
 
+## Android unit tests need real org.json
+
+AGP host-JVM unit tests run against the *mockable* `android.jar`, whose
+`org.json` classes (`JSONArray`/`JSONObject`) are do-nothing stubs. With
+`unitTests.isReturnDefaultValues = true` (set in
+[`../../android/app/build.gradle.kts`](../../android/app/build.gradle.kts))
+they don't even throw — they silently return `0`/`null`, so a JSON
+round-trip test "passes" against empty data or NPEs on `toString()`.
+`testImplementation("org.json:json:...")` is declared to shadow the stubs
+with the real implementation; don't remove it.
+
+Gradle-10 deprecation state (checked with `--warning-mode all`): the two
+remaining multi-string-notation warnings (`lint-gradle`, `aapt2`) are
+internal to AGP 8.13.x and go away only with the AGP 9 major upgrade,
+which was deliberately deferred.
+
 ## OpenAPI lives in two places
 
 The swag-generated spec is committed to
