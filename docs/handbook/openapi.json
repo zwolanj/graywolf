@@ -5980,6 +5980,59 @@
                 }
             }
         },
+        "/messages/threads/{kind}/{key}/read": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Mark message thread read",
+                "operationId": "markMessageThreadRead",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Thread kind (dm | tactical)",
+                        "name": "kind",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Thread key (peer callsign for DM, tactical label for tactical)",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/messages/{id}": {
             "get": {
                 "security": [
@@ -11302,6 +11355,10 @@
                     "description": "MaxMessageTextOverride raises the default 67-char addressee-line\ndirect-message cap. 0 (or field absent) means \"use the default\";\nany positive value must fall in [MaxMessageText+1, MaxMessageTextUnsafe]\n(68..200). Applies to addressee-line DMs only — bulletins, status\nbeacons, and position/weather frames are unaffected. The server\nrejects out-of-range values with 400 rather than silently clamping\nso operators see a clear error.",
                     "type": "integer"
                 },
+                "notify_on_message": {
+                    "description": "NotifyOnMessage enables the new-message alert (Android notification,\ndesktop browser notification/sound). Absent means \"leave unchanged\"\nso older clients cannot silently flip it.",
+                    "type": "boolean"
+                },
                 "retention_days": {
                     "type": "integer"
                 },
@@ -11322,6 +11379,10 @@
                 "max_message_text_override": {
                     "description": "MaxMessageTextOverride mirrors the request field on read. 0\nmeans \"default enforce 67\" — older servers that have never been\nupgraded return 0 here, which is also what a fresh singleton with\nno override set returns. Positive values fall in\n(MaxMessageText, MaxMessageTextUnsafe].",
                     "type": "integer"
+                },
+                "notify_on_message": {
+                    "description": "NotifyOnMessage mirrors the request field; true on a fresh install.",
+                    "type": "boolean"
                 },
                 "retention_days": {
                     "type": "integer"

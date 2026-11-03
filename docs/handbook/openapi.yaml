@@ -1965,6 +1965,12 @@ definitions:
           rejects out-of-range values with 400 rather than silently clamping
           so operators see a clear error.
         type: integer
+      notify_on_message:
+        description: |-
+          NotifyOnMessage enables the new-message alert (Android notification,
+          desktop browser notification/sound). Absent means "leave unchanged"
+          so older clients cannot silently flip it.
+        type: boolean
       retention_days:
         type: integer
       retry_max_attempts:
@@ -1984,6 +1990,9 @@ definitions:
           no override set returns. Positive values fall in
           (MaxMessageText, MaxMessageTextUnsafe].
         type: integer
+      notify_on_message:
+        description: NotifyOnMessage mirrors the request field; true on a fresh install.
+        type: boolean
       retention_days:
         type: integer
       retry_max_attempts:
@@ -7441,6 +7450,40 @@ paths:
       security:
         - CookieAuth: []
       summary: Delete message thread
+      tags:
+        - messages
+  /messages/threads/{kind}/{key}/read:
+    post:
+      operationId: markMessageThreadRead
+      parameters:
+        - description: Thread kind (dm | tactical)
+          in: path
+          name: kind
+          required: true
+          type: string
+        - description: Thread key (peer callsign for DM, tactical label for tactical)
+          in: path
+          name: key
+          required: true
+          type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+      security:
+        - CookieAuth: []
+      summary: Mark message thread read
       tags:
         - messages
   /otp-credentials:

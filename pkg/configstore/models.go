@@ -999,9 +999,13 @@ type MessagePreferences struct {
 	// anything outside that range. Applies to addressee-line DMs only:
 	// bulletins, status beacons, and position/weather frames are
 	// unaffected.
-	MaxMessageTextOverride uint32    `gorm:"not null;default:0" json:"max_message_text_override"`
-	CreatedAt              time.Time `json:"-"`
-	UpdatedAt              time.Time `json:"-"`
+	MaxMessageTextOverride uint32 `gorm:"not null;default:0" json:"max_message_text_override"`
+	// NotificationsMuted is stored inverted so the zero value (and every
+	// pre-upgrade row) means "notify on new messages" with no backfill and
+	// no GORM zero-value-default trap.
+	NotificationsMuted bool      `gorm:"not null;default:false" json:"notifications_muted"`
+	CreatedAt          time.Time `json:"-"`
+	UpdatedAt          time.Time `json:"-"`
 }
 
 // ConversationPrefs holds per-conversation overrides for one message

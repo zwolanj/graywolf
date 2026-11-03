@@ -56,6 +56,7 @@ function buildPayload(baseline, patch) {
     retention_days: merged.retention_days,
     retry_max_attempts: merged.retry_max_attempts,
     max_message_text_override: normalizeOverride(merged.max_message_text_override),
+    notify_on_message: merged.notify_on_message,
   };
 }
 
@@ -69,6 +70,7 @@ export const messagesPreferencesState = (() => {
     retention_days?: number,
     retry_max_attempts?: number,
     max_message_text_override?: number,
+    notify_on_message?: boolean,
   }} */ (null));
 
   let loaded = $state(false);
@@ -174,6 +176,34 @@ export const messagesPreferencesState = (() => {
     }
   }
 
+  async function setNotifyOnMessage(on) {
+    if (!hydrated) {
+      await fetchPreferences();
+      if (!hydrated) {
+        toasts.error("Couldn't load preferences — try again in a moment.");
+        return;
+      }
+    }
+    const baseline = prefs;
+    const optimistic = { ...baseline, notify_on_message: !!on };
+    prefs = optimistic;
+    saving = true;
+    error = null;
+    try {
+      const resp = await putPreferences(buildPayload(baseline, { notify_on_message: !!on }));
+      const next = resp ?? optimistic;
+      next.max_message_text_override = normalizeOverride(next.max_message_text_override);
+      prefs = next;
+      toasts.success('Saved');
+    } catch (e) {
+      prefs = baseline;
+      error = e?.message || String(e);
+      toasts.error("Couldn't save notification setting — try again.");
+    } finally {
+      saving = false;
+    }
+  }
+
   return {
     get loaded() { return loaded; },
     get saving() { return saving; },
@@ -189,6 +219,8 @@ export const messagesPreferencesState = (() => {
       return normalizeOverride(prefs?.max_message_text_override) > 0;
     },
     get fallbackPolicy() { return prefs?.fallback_policy || 'is_fallback'; },
+    // Defaults on until the server says otherwise.
+    get notifyOnMessage() { return prefs?.notify_on_message !== false; },
     // Effective cap the compose bar should enforce. Mirrors the server's
     // sender gate: 0 => 67, otherwise => the override value itself.
     get maxMessageText() {
@@ -200,6 +232,7 @@ export const messagesPreferencesState = (() => {
     setOverride,
     setAllowLong,
     setFallbackPolicy,
+    setNotifyOnMessage,
   };
 })();
 

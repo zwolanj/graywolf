@@ -48,6 +48,9 @@ type Client interface {
 	// BLERepair removes the Android bond for mac so the next BLEOpen triggers
 	// fresh pairing with the TNC.
 	BLERepair(ctx context.Context, mac string) error
+	// NotifyMessage asks the Android side to post a system notification for
+	// an inbound message. Fire-and-forget; no ack.
+	NotifyMessage(n *MessageNotification) error
 	Close() error
 }
 

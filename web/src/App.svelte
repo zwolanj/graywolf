@@ -13,6 +13,8 @@
   import { releaseNotes } from './lib/releaseNotesStore.svelte.js';
   import { unitsState } from './lib/settings/units-store.svelte.js';
   import { themeState } from './lib/settings/theme-store.svelte.js';
+  import { messagesPreferencesState } from './lib/settings/messages-preferences-store.svelte.js';
+  import { armChime } from './lib/messageAlert.js';
 
   // Every route is lazy-loaded: each one is its own chunk, fetched only when
   // the operator actually navigates there, with RouteLoading shown while it
@@ -138,6 +140,9 @@
       // distances/altitudes/speeds the way the operator last saved.
       unitsState.fetchConfig();
       themeState.fetchConfig();
+      // New-message alerts need the notify preference and an unlocked AudioContext.
+      messagesPreferencesState.fetchPreferences();
+      armChime();
     }
   });
 </script>

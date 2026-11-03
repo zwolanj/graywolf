@@ -36,6 +36,7 @@ type fakeMessagesSvc struct {
 	softDeleteFn       func(ctx context.Context, id uint64) error
 	softDeleteThreadFn func(ctx context.Context, kind, key string) (int, error)
 	markReadFn         func(ctx context.Context, id uint64) error
+	markThreadReadFn   func(ctx context.Context, kind, key string) error
 	markUnreadFn       func(ctx context.Context, id uint64) error
 	reloadTacticalFn   func(ctx context.Context) error
 	reloadBlockedFn    func(ctx context.Context) error
@@ -76,6 +77,12 @@ func (f *fakeMessagesSvc) SoftDeleteThread(ctx context.Context, kind, key string
 func (f *fakeMessagesSvc) MarkRead(ctx context.Context, id uint64) error {
 	if f.markReadFn != nil {
 		return f.markReadFn(ctx, id)
+	}
+	return nil
+}
+func (f *fakeMessagesSvc) MarkThreadRead(ctx context.Context, kind, key string) error {
+	if f.markThreadReadFn != nil {
+		return f.markThreadReadFn(ctx, kind, key)
 	}
 	return nil
 }
@@ -829,6 +836,42 @@ func TestMarkRead_204(t *testing.T) {
 	}
 }
 
+func TestMarkThreadRead_204(t *testing.T) {
+	type call struct{ kind, key string }
+	calls := make(chan call, 1)
+	svc := &fakeMessagesSvc{
+		markThreadReadFn: func(ctx context.Context, kind, key string) error {
+			calls <- call{kind, key}
+			return nil
+		},
+	}
+	_, mux, _ := newMessagesTestServer(t, svc)
+	req := httptest.NewRequest(http.MethodPost, "/api/messages/threads/dm/w1abc/read", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	select {
+	case c := <-calls:
+		if c.kind != messages.ThreadKindDM || c.key != "W1ABC" {
+			t.Errorf("unexpected call: %+v", c)
+		}
+	case <-time.After(time.Second):
+		t.Error("MarkThreadRead not called")
+	}
+}
+
+func TestMarkThreadRead_BadKind(t *testing.T) {
+	_, mux, _ := newMessagesTestServer(t, &fakeMessagesSvc{})
+	req := httptest.NewRequest(http.MethodPost, "/api/messages/threads/bogus/W1ABC/read", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestMarkUnread_204(t *testing.T) {
 	marked := make(chan uint64, 1)
 	svc := &fakeMessagesSvc{
@@ -1111,6 +1154,39 @@ func TestPutPreferences_RoundTrip(t *testing.T) {
 	case <-reloaded:
 	case <-time.After(time.Second):
 		t.Error("ReloadPreferences was not called")
+	}
+}
+
+// --- Conversation prefs --------------------------------------------------
+
+func TestPutPreferences_NotifyOnMessage(t *testing.T) {
+	_, mux, _ := newMessagesTestServer(t, &fakeMessagesSvc{})
+	put := func(body string) dto.MessagePreferencesResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPut, "/api/messages/preferences", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp dto.MessagePreferencesResponse
+		_ = json.NewDecoder(rec.Body).Decode(&resp)
+		return resp
+	}
+	const base = `"fallback_policy":"rf_only","default_path":"WIDE2-2","retry_max_attempts":3,"retention_days":30`
+
+	if got := put(`{` + base + `}`); !got.NotifyOnMessage {
+		t.Errorf("fresh install: notify_on_message = false, want true")
+	}
+	if got := put(`{` + base + `,"notify_on_message":false}`); got.NotifyOnMessage {
+		t.Errorf("explicit false: notify_on_message = true, want false")
+	}
+	// An older client that omits the field must not flip it back on.
+	if got := put(`{` + base + `}`); got.NotifyOnMessage {
+		t.Errorf("omitted field changed stored value to true")
+	}
+	if got := put(`{` + base + `,"notify_on_message":true}`); !got.NotifyOnMessage {
+		t.Errorf("explicit true: notify_on_message = false, want true")
 	}
 }
 

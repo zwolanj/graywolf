@@ -184,6 +184,7 @@ type MessagesService interface {
 	SoftDelete(ctx context.Context, id uint64) error
 	SoftDeleteThread(ctx context.Context, kind, key string) (int, error)
 	MarkRead(ctx context.Context, id uint64) error
+	MarkThreadRead(ctx context.Context, kind, key string) error
 	MarkUnread(ctx context.Context, id uint64) error
 	ReloadTacticalCallsigns(ctx context.Context) error
 	ReloadBlockedCallsigns(ctx context.Context) error

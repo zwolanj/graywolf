@@ -90,6 +90,13 @@ class PlatformServer(
 
     @Volatile private var usbDeviceLister: ((UsbClass) -> List<ProtoUsbDevice>)? = null
 
+    @Volatile private var messageNotifier: MessageNotifier? = null
+
+    /** Attach the inbound-message notifier; safe to call once during onCreate. */
+    fun attachMessageNotifier(notifier: MessageNotifier) {
+        messageNotifier = notifier
+    }
+
     /**
      * Attach the USB enumeration provider. The lambda receives the
      * class_filter from each UsbDeviceListRequest and must return the
@@ -329,6 +336,10 @@ class PlatformServer(
                     }
                     PlatformMessage.BodyCase.BLE_REPAIR_REQUEST -> {
                         bleAdapter?.handleRepairRequest(req.bleRepairRequest)
+                        continue
+                    }
+                    PlatformMessage.BodyCase.MESSAGE_NOTIFICATION -> {
+                        messageNotifier?.handle(req.messageNotification)
                         continue
                     }
                     PlatformMessage.BodyCase.USB_LIST_REQ -> {

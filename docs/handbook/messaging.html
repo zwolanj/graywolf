@@ -368,6 +368,28 @@
       OTP-protected fire to many callsigns at once would be a footgun.
     </p>
 
+    <h2>Read status and alerts</h2>
+
+    <p>
+      Opening a conversation marks everything in it as read, and a message
+      that arrives while that conversation is open is marked read right away.
+      There is no per-message read state to manage.
+    </p>
+
+    <p>
+      When a new message arrives graywolf can alert you. On Android it posts
+      a notification like a text message (tap it to open the conversation;
+      it is skipped while the app is on screen), and sound and vibration
+      follow the <em>Messages</em> channel in Android&rsquo;s notification
+      settings. On desktop it shows a browser notification once you click
+      <strong>Enable desktop notifications</strong> in
+      <em>Preferences &rarr; Messaging</em>, and plays a short chime when the
+      browser cannot show one. Browsers only allow notifications over HTTPS or
+      on <code>localhost</code>, so a page opened by LAN address gets the chime.
+      Desktop alerts only fire while the graywolf page is open. Turn the alert
+      off with the same page&rsquo;s <em>New message alerts</em> toggle.
+    </p>
+
     <h2>Edge cases</h2>
 
     <ul>

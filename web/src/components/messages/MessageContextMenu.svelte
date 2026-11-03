@@ -11,7 +11,6 @@
   //   - Reply privately to [sender]   (tactical incoming only — always top)
   //   - Copy text / Copy callsign / Copy raw
   //   - Resend / Abort / Delete       (outbound DM only — see gating below)
-  //   - Mark unread                   (incoming only)
   //
   // Resend/Abort/Delete gating (DM outbound only — tactical is single-shot
   // broadcast with no retry ladder to cancel or resend into):
@@ -38,7 +37,6 @@
    *    onCopyRaw?: (msg: any) => void,
    *    onCopyCall?: (msg: any) => void,
    *    onReplyPrivate?: (fromCall: string) => void,
-   *    onMarkUnread?: (msg: any) => void,
    *    onResend?: (msg: any) => void,
    *    onAbort?: (msg: any) => void,
    *    onDelete?: (msg: any) => void,
@@ -56,7 +54,6 @@
     onCopyRaw,
     onCopyCall,
     onReplyPrivate,
-    onMarkUnread,
     onResend,
     onAbort,
     onDelete,
@@ -175,13 +172,6 @@
           <span>Delete</span>
         </button>
       {/if}
-    {/if}
-    {#if !isOut}
-      <div class="sep" role="separator"></div>
-      <button type="button" class="item" role="menuitem" onclick={() => pick(onMarkUnread)}>
-        <Icon name="eye-off" size="sm" />
-        <span>Mark unread</span>
-      </button>
     {/if}
     {#if msg}
       <div class="menu-footer" data-testid="context-menu-footer">

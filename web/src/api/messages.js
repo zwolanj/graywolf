@@ -103,19 +103,13 @@ export function deleteMessageThread(kind, key) {
 }
 
 /**
- * POST /api/messages/{id}/read — 204.
- * @param {number} id
+ * POST /api/messages/threads/{kind}/{key}/read — marks every inbound
+ * message in the thread read (204).
+ * @param {string} kind  'dm' | 'tactical'
+ * @param {string} key   peer callsign (DM) or tactical label
  */
-export function markRead(id) {
-  return api.post(`/messages/${encodeURIComponent(id)}/read`);
-}
-
-/**
- * POST /api/messages/{id}/unread — 204.
- * @param {number} id
- */
-export function markUnread(id) {
-  return api.post(`/messages/${encodeURIComponent(id)}/unread`);
+export function markThreadRead(kind, key) {
+  return api.post(`/messages/threads/${encodeURIComponent(kind)}/${encodeURIComponent(key)}/read`);
 }
 
 /**

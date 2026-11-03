@@ -28,7 +28,7 @@
   import CredentialsModal from '../components/messages/remote_actions/CredentialsModal.svelte';
   import EmptyStates from '../components/messages/EmptyStates.svelte';
   import { messages as store } from '../lib/messagesStore.svelte.js';
-  import { sendMessage } from '../api/messages.js';
+  import { sendMessage, markThreadRead } from '../api/messages.js';
   import { DEFAULT_MAX_MESSAGE_TEXT } from '../lib/settings/messages-preferences-store.svelte.js';
   import { refreshNow } from '../lib/messagesTransport.js';
   import { toasts } from '../lib/stores.js';
@@ -68,9 +68,29 @@
     }
   });
 
+  // The only read trigger: a selected thread with unread messages is marked
+  // read, so click, keyboard, deep link and arrivals in the open thread all
+  // land here. No rollback on failure; the 30s rollup restores the badge
+  // and re-fires this effect.
+  let markingThreadId = $state(null);
+  $effect(() => {
+    const id = store.activeThreadId;
+    if (!id || inSettings || markingThreadId === id) return;
+    const t = store.conversations.get(id);
+    if (!t || !(t.unreadCount > 0)) return;
+    markingThreadId = id;
+    store.clearUnread(id);
+    markThreadRead(t.kind, t.key)
+      .catch(() => {})
+      .finally(() => { if (markingThreadId === id) markingThreadId = null; });
+  });
+
   // ---------- prime data on mount ----------
   onMount(() => {
     refreshNow();
+    // Leaving the route must not leave a thread "open": new-message alerts
+    // treat the active thread as the one being read.
+    return () => store.setActiveThread(null);
   });
 
   // ---------- APRS-IS connectivity banner ----------

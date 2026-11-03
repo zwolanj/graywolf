@@ -401,6 +401,10 @@ type MessagePreferencesRequest struct {
 	// rejects out-of-range values with 400 rather than silently clamping
 	// so operators see a clear error.
 	MaxMessageTextOverride uint32 `json:"max_message_text_override,omitempty"`
+	// NotifyOnMessage enables the new-message alert (Android notification,
+	// desktop browser notification/sound). Absent means "leave unchanged"
+	// so older clients cannot silently flip it.
+	NotifyOnMessage *bool `json:"notify_on_message,omitempty"`
 }
 
 // Validate clamps FallbackPolicy to the canonical enum and enforces
@@ -442,6 +446,7 @@ func (r MessagePreferencesRequest) ToModel() configstore.MessagePreferences {
 		RetryMaxAttempts:       r.RetryMaxAttempts,
 		RetentionDays:          r.RetentionDays,
 		MaxMessageTextOverride: r.MaxMessageTextOverride,
+		NotificationsMuted:     r.NotifyOnMessage != nil && !*r.NotifyOnMessage,
 	}
 }
 
@@ -457,6 +462,8 @@ type MessagePreferencesResponse struct {
 	// no override set returns. Positive values fall in
 	// (MaxMessageText, MaxMessageTextUnsafe].
 	MaxMessageTextOverride uint32 `json:"max_message_text_override"`
+	// NotifyOnMessage mirrors the request field; true on a fresh install.
+	NotifyOnMessage bool `json:"notify_on_message"`
 }
 
 // MessagePreferencesFromModel renders one row. Applies policy
@@ -485,6 +492,7 @@ func MessagePreferencesFromModel(m configstore.MessagePreferences) MessagePrefer
 		RetryMaxAttempts:       retry,
 		RetentionDays:          m.RetentionDays,
 		MaxMessageTextOverride: override,
+		NotifyOnMessage:        !m.NotificationsMuted,
 	}
 }
 
@@ -507,7 +515,7 @@ type ConversationPrefsRequest struct {
 }
 
 // Validate constrains SendPath to the inherit-or-enum set. is_fallback
-// is rejected as an override: it is identical to inherit ('') and
+// is rejected as an override: it is identical to inherit (”) and
 // accepting both would give two encodings for the same behavior.
 func (r ConversationPrefsRequest) Validate() error {
 	switch r.SendPath {

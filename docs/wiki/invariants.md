@@ -2107,40 +2107,66 @@ frame. Regression guards: `TestDecodeSharedDelimiter`, `TestDecodeTrailingFendOn
 
 Source: [`../../pkg/kiss/framing.go`](../../pkg/kiss/framing.go) (`Decoder.synced`, `Decoder.Next`).
 
-### 70. Message unread counts update optimistically on mark-read, not only via the rollup poll
+### 70. A thread is marked read only by selecting it, through one server call
 
-`MessageThread.svelte`'s `flushBatch` calls `store.adjustUnread(threadId, -n)`
-for every thread in the batch *before* the `markRead` requests resolve,
-and rolls back (`adjustUnread(threadId, +n)`) any message whose request
-fails. The 30s `refreshConversations()` poll in `messagesTransport.js`
-is reconciliation for drift, not the primary signal path. Each batched
-message carries its own `thread_kind`/`thread_key`, because the
-component is not remounted on a thread switch and a batch can straddle
-two threads.
+`Messages.svelte` has a single `$effect` that fires whenever
+`store.activeThreadId` points at a thread with `unreadCount > 0`: it zeroes
+the badge locally (`store.clearUnread`) and calls
+`POST /api/messages/threads/{kind}/{key}/read` (`markThreadRead`). Click,
+keyboard cycling, deep links, an Android notification tap, and a message
+arriving in the already-open thread all go through `setActiveThread`, so
+they share that one path. There is no scroll/dwell/visibility mark-read, no
+per-message `markRead` call from the SPA, and no "mark unread" action.
 
-A message's `unread` flag is cleared the moment it is batched (and
-restored if its `markRead` fails). `msgs` is loaded once per thread
-visit, so without that, scrolling a read message out of view and back,
-or a tab switch that runs `rebuildIO()`, would batch it again and lower
-the count a second time.
+There is no rollback on failure: the 30s `refreshConversations()` rollup in
+`messagesTransport.js` restores the server's count, which re-fires the
+effect (a natural retry). `Service.MarkThreadRead` publishes no event.
 
-Each `MessageBubble` hands its element back on unmount
-(`registerRef(el, false)`) so `MessageThread` can unobserve it and drop
-it from `bubbleByEl`; otherwise every thread switch leaves the old
-thread's detached bubbles in the map and re-observed on each
-`rebuildIO()`.
+*Why:* One trigger is easy to reason about; the old IntersectionObserver
+batching needed per-message bookkeeping (dwell timers, element maps,
+rollback counts) to keep the badge correct. The per-message
+`/messages/{id}/read` and `/unread` endpoints remain as public REST API but
+the SPA no longer calls them.
 
-*Why:* `messages.Service.MarkRead` is plain REST and publishes no event,
-so an unread badge that waits on the poll lags up to 30s behind what the
-operator already read. Any future unread surface should follow the same pattern:
-optimistic update, rollback on failure.
-
-Source: [`../../web/src/components/messages/MessageThread.svelte`](../../web/src/components/messages/MessageThread.svelte)
-(`flushBatch`, `observe`/`unobserve`),
-[`../../web/src/components/messages/MessageBubble.svelte`](../../web/src/components/messages/MessageBubble.svelte),
+Source: [`../../web/src/routes/Messages.svelte`](../../web/src/routes/Messages.svelte)
+(`markingThreadId` effect),
 [`../../web/src/lib/messagesStore.svelte.js`](../../web/src/lib/messagesStore.svelte.js)
-(`adjustUnread`),
-[`../../web/src/lib/unread-batch-core.js`](../../web/src/lib/unread-batch-core.js).
+(`clearUnread`),
+[`../../pkg/messages/store.go`](../../pkg/messages/store.go) (`MarkThreadRead`),
+[`../../pkg/webapi/messages.go`](../../pkg/webapi/messages.go) (`markMessageThreadRead`).
+
+### 73. New-message alerts are native on Android and SPA-driven on desktop
+
+On Android the WebView is not alive in the background, so the Go child
+subscribes to `msgSvc.EventHub()` (`pkg/app/messagenotify_android.go`),
+loads the stored row, filters it (`inboundNotification`: inbound, unread,
+not ack/rej/bulletin/NWS), honours `MessagePreferences.NotificationsMuted`,
+and sends a fire-and-forget `MessageNotification` over platformsvc.
+`MessageNotifier.kt` posts it on the "Messages" channel and skips it while
+`MainActivity.isForeground`. Adding that proto message bumped
+`SchemaVersion` to 5 (Go `schema_version.go` and Kotlin `schemaVersion` must
+match; `schema_version_test.go` enforces it).
+
+On desktop, `messagesTransport.applyChange` calls `maybeAlert` before the
+store upsert. It alerts after the delta feed has caught up with history
+(`baselineDone`), for an unread inbound message whose id is not already in
+`messageById` (the change kind is ignored: an auto-acked message arrives as
+`updated`), outside muted threads. It deliberately does NOT suppress for the
+open or focused thread: an operator can leave a thread open and walk away.
+It uses the browser
+Notification API when permission is granted and otherwise a synthesized
+chime. Notification needs a secure context (HTTPS or localhost) and graywolf
+serves plain HTTP, so LAN browsers get the chime only.
+
+`NotificationsMuted` is stored inverted so the zero value (every pre-upgrade
+row) means "notify"; the PUT DTO field `notify_on_message` is a `*bool` so
+older clients that omit it do not flip the setting.
+
+Source: [`../../pkg/app/messagenotify.go`](../../pkg/app/messagenotify.go),
+[`../../pkg/app/messagenotify_android.go`](../../pkg/app/messagenotify_android.go),
+[`../../android/app/src/main/kotlin/com/nw5w/graywolf/platformsvc/MessageNotifier.kt`](../../android/app/src/main/kotlin/com/nw5w/graywolf/platformsvc/MessageNotifier.kt),
+[`../../web/src/lib/messageAlert.js`](../../web/src/lib/messageAlert.js),
+[`../../web/src/lib/messageAlertCore.js`](../../web/src/lib/messageAlertCore.js).
 
 ### 71. A serial KISS session must end on write failure, manual reconnect, or (watched links) RX silence -- never only on a read error
 

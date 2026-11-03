@@ -427,6 +427,37 @@ func TestMarkReadUnread(t *testing.T) {
 	}
 }
 
+func TestMarkThreadRead(t *testing.T) {
+	ctx := context.Background()
+	store, _ := newTestStore(t)
+
+	inA := seedMsg("in", "K0ABC", "W1ABC", "K0ABC", "a", "001")
+	inA.Unread = true
+	inB := seedMsg("in", "K0ABC", "W2XYZ", "K0ABC", "b", "002")
+	inB.Unread = true
+	for _, m := range []*configstore.Message{inA, inB} {
+		if err := store.Insert(ctx, m); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	n, err := store.MarkThreadRead(ctx, inA.ThreadKind, inA.ThreadKey)
+	if err != nil {
+		t.Fatalf("MarkThreadRead: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("rows affected = %d, want 1", n)
+	}
+	gotA, _ := store.GetByID(ctx, inA.ID)
+	gotB, _ := store.GetByID(ctx, inB.ID)
+	if gotA.Unread {
+		t.Errorf("thread A still unread")
+	}
+	if !gotB.Unread {
+		t.Errorf("thread B was cleared by a different thread's mark")
+	}
+}
+
 func TestSoftDeleteAndUnscopedFind(t *testing.T) {
 	ctx := context.Background()
 	store, _ := newTestStore(t)

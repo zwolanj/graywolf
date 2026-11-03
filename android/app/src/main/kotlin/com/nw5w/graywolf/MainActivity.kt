@@ -19,6 +19,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import com.nw5w.graywolf.usb.UsbPttAdapter
+import com.nw5w.graywolf.platformsvc.MessageNotificationFormat
+import com.nw5w.graywolf.platformsvc.MessageNotifier
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -41,6 +43,9 @@ class MainActivity : Activity() {
     // request. Cleared in onRequestPermissionsResult after we post the
     // window.__btResult dispatch back to the WebView.
     private var pendingBtPermCallback: String? = null
+
+    // Thread to open once the SPA is loaded, set by a message-notification tap.
+    private var pendingThreadId: String? = null
 
     // Reloads the WebView after a storage migration completes.
     private val reloadReceiver = object : android.content.BroadcastReceiver() {
@@ -86,6 +91,7 @@ class MainActivity : Activity() {
         // over USB, and (independently of that) makes onConsoleMessage below
         // actually fire for console.* calls and uncaught/unhandled JS errors.
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        rememberThreadFrom(intent)
         webView = WebView(this).also {
             it.settings.javaScriptEnabled = true
             it.settings.domStorageEnabled = true
@@ -362,7 +368,7 @@ class MainActivity : Activity() {
         val r = object : Runnable {
             override fun run() {
                 if (GraywolfService.goListenerReady) {
-                    webView.loadUrl("http://127.0.0.1:8080/")
+                    webView.loadUrl("http://127.0.0.1:8080/" + takeThreadRoute())
                     Log.i(TAG, "poc-b: webview_loaded")
                 } else if (System.currentTimeMillis() - started < 30_000) {
                     mainHandler.postDelayed(this, 250)
@@ -376,6 +382,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        isForeground = true
+        MessageNotifier.cancelAll(this)
         if (!batteryOptIntentChecked) {
             batteryOptIntentChecked = true
             maybeRequestBatteryOptWhitelist()
@@ -416,6 +424,34 @@ class MainActivity : Activity() {
         markBatteryOptWhitelistRequested(this)
     }
 
+    override fun onPause() {
+        isForeground = false
+        super.onPause()
+    }
+
+    // singleTop: a notification tap while we're already running lands here.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        rememberThreadFrom(intent)
+        if (::webView.isInitialized && GraywolfService.goListenerReady) {
+            val route = takeThreadRoute()
+            if (route.isNotEmpty()) webView.evaluateJavascript("location.hash='$route'", null)
+        }
+    }
+
+    private fun rememberThreadFrom(intent: Intent?) {
+        val id = intent?.getStringExtra(EXTRA_THREAD_ID)
+        if (MessageNotificationFormat.isValidThreadId(id)) pendingThreadId = id
+    }
+
+    // Returns "#/messages?thread=..." (or "" when nothing is pending) and clears it.
+    private fun takeThreadRoute(): String {
+        val id = pendingThreadId ?: return ""
+        pendingThreadId = null
+        return "#/messages?thread=" + Uri.encode(id)
+    }
+
     override fun onDestroy() {
         try { unregisterReceiver(reloadReceiver) } catch (_: IllegalArgumentException) { /* idempotent */ }
         // The USB-attach suppression path finish()es in onCreate before webView
@@ -426,6 +462,10 @@ class MainActivity : Activity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        const val EXTRA_THREAD_ID = "thread_id"
+
+        // Read by GraywolfService's MessageNotifier to skip alerts while the UI is visible.
+        @Volatile var isForeground = false
         private const val REQ_PERMS = 0x101
         // Distinct request code for BLUETOOTH_CONNECT runtime permission so
         // onRequestPermissionsResult can route the result to the SPA's

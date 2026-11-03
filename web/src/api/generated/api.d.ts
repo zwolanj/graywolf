@@ -1404,6 +1404,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/threads/{kind}/{key}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark message thread read */
+        post: operations["markMessageThreadRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{id}": {
         parameters: {
             query?: never;
@@ -3300,6 +3317,12 @@ export interface components {
              *     so operators see a clear error.
              */
             max_message_text_override?: number;
+            /**
+             * @description NotifyOnMessage enables the new-message alert (Android notification,
+             *     desktop browser notification/sound). Absent means "leave unchanged"
+             *     so older clients cannot silently flip it.
+             */
+            notify_on_message?: boolean;
             retention_days?: number;
             retry_max_attempts?: number;
         };
@@ -3314,6 +3337,8 @@ export interface components {
              *     (MaxMessageText, MaxMessageTextUnsafe].
              */
             max_message_text_override?: number;
+            /** @description NotifyOnMessage mirrors the request field; true on a fresh install. */
+            notify_on_message?: boolean;
             retention_days?: number;
             retry_max_attempts?: number;
         };
@@ -9502,6 +9527,56 @@ export interface operations {
         };
     };
     deleteMessageThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread kind (dm | tactical) */
+                kind: string;
+                /** @description Thread key (peer callsign for DM, tactical label for tactical) */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+        };
+    };
+    markMessageThreadRead: {
         parameters: {
             query?: never;
             header?: never;

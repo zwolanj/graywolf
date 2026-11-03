@@ -696,3 +696,9 @@ func (s *Service) MarkRead(ctx context.Context, id uint64) error {
 func (s *Service) MarkUnread(ctx context.Context, id uint64) error {
 	return s.cfg.Store.MarkUnread(ctx, id)
 }
+
+// MarkThreadRead clears the unread flag on every inbound row of a thread.
+func (s *Service) MarkThreadRead(ctx context.Context, kind, key string) error {
+	_, err := s.cfg.Store.MarkThreadRead(ctx, kind, key)
+	return err
+}

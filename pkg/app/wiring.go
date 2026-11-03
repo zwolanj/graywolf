@@ -3212,6 +3212,7 @@ func (a *App) messagesComponent() namedComponent {
 			if err := a.msgSvc.Start(ctx); err != nil {
 				return fmt.Errorf("messages service start: %w", err)
 			}
+			a.startMessageNotifier(ctx)
 			if a.messagesReload != nil {
 				a.messagesReloadWG.Add(1)
 				go func() {

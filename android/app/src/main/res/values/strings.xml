@@ -5,4 +5,5 @@
     <string name="notification_title">Graywolf Running</string>
     <string name="notification_text">Graywolf background process is running</string>
     <string name="notification_stop_label">Stop</string>
+    <string name="message_channel_name">Messages</string>
 </resources>

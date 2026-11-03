@@ -31,6 +31,7 @@
 // from any page.
 
 import { messages } from './messagesStore.svelte.js';
+import { maybeAlert } from './messageAlert.js';
 import {
   listMessages,
   listConversations,
@@ -48,6 +49,11 @@ let started = false;
 let stopped = false;
 let es = null; // EventSource when SSE is active
 let esBackoff = POLL_BASE_MS;
+// False until the delta feed has caught up with history (a page shorter than
+// DELTA_PAGE_LIMIT), so replayed history never raises an alert.
+let baselineDone = false;
+const DELTA_PAGE_LIMIT = 100;
+const MAX_CATCHUP_PAGES = 50;
 
 /** Detect whether SSE should be used. Off by default; opt-in via ?sse=1. */
 function shouldUseSSE() {
@@ -68,16 +74,26 @@ function applyChange(change) {
     messages.markDeleted(change.id);
     return;
   }
-  if (change.message) messages.upsertMessage(change.message);
+  if (change.message) {
+    maybeAlert(change, baselineDone);
+    messages.upsertMessage(change.message);
+  }
 }
 
 async function fetchDelta() {
-  const cursor = messages.lastCursor || '';
-  const resp = await listMessages(cursor ? { cursor } : undefined);
-  if (!resp) return;
-  if (resp.cursor) messages.lastCursor = resp.cursor;
-  if (Array.isArray(resp.changes)) {
-    for (const c of resp.changes) applyChange(c);
+  // The forward feed pages oldest-first, so drain full pages back to back
+  // instead of waiting a poll interval between them.
+  for (let page = 0; page < MAX_CATCHUP_PAGES; page++) {
+    const cursor = messages.lastCursor || '';
+    const resp = await listMessages({ limit: DELTA_PAGE_LIMIT, ...(cursor ? { cursor } : {}) });
+    if (!resp) return;
+    if (resp.cursor) messages.lastCursor = resp.cursor;
+    const changes = Array.isArray(resp.changes) ? resp.changes : [];
+    for (const c of changes) applyChange(c);
+    if (changes.length < DELTA_PAGE_LIMIT) {
+      baselineDone = true;
+      return;
+    }
   }
 }
 

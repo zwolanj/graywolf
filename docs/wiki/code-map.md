@@ -426,6 +426,7 @@ section), [`../handbook/kiss-bluetooth.html`](../handbook/kiss-bluetooth.html),
 | Bluetooth facade + permission/bond receivers | `platformsvc/BluetoothFacade.kt` |
 | RFCOMM byte relay for KISS-over-Bluetooth | `platformsvc/BtSerialAdapter.kt` -- owns one `BluetoothSocket` per handle; pump pair on worker thread; multiplexes through the platform UDS via `SerialOpen` / `SerialData` / `SerialClose` / `SerialError` proto messages |
 | Audio capture / playback pumps | `audio/AudioPump.kt`, `audio/AudioTxPump.kt`, `audio/AudioTxTest.kt` |
+| Inbound-message notifications | `platformsvc/MessageNotifier.kt` (posts on the "Messages" channel, deep-links via `MainActivity.EXTRA_THREAD_ID`); fed by `MessageNotification` from Go `pkg/app/messagenotify_android.go`; see invariant #73 |
 | GPS adapter | `gps/GpsAdapter.kt` |
 
 The blocking-call-on-worker-thread rule that applies to USB and

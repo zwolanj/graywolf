@@ -262,6 +262,7 @@ const (
 	OpDeleteMessage           = "deleteMessage"
 	OpDeleteMessageThread     = "deleteMessageThread"
 	OpMarkMessageRead         = "markMessageRead"
+	OpMarkMessageThreadRead   = "markMessageThreadRead"
 	OpMarkMessageUnread       = "markMessageUnread"
 	OpResendMessage           = "resendMessage"
 	OpListConversations       = "listConversations"

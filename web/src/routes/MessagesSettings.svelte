@@ -12,6 +12,15 @@
   } from '../api/messages.js';
   import { toasts } from '../lib/stores.js';
   import PageHeader from '../components/PageHeader.svelte';
+  import { Platform } from '../lib/platform.js';
+  import { notificationState, requestNotificationPermission } from '../lib/messageAlert.js';
+
+  const isAndroid = Platform.isAndroid;
+  let notifyState = $state(notificationState());
+
+  async function enableBrowserNotifications() {
+    notifyState = await requestNotificationPermission();
+  }
 
   const fallbackPolicyOptions = [
     { value: 'is_fallback', label: 'Try RF first, fall back to APRS-IS' },
@@ -152,6 +161,38 @@
       />
     {/snippet}
   </FormField>
+</Box>
+
+<Box title="New message alerts">
+  <Toggle
+    checked={messagesPreferencesState.notifyOnMessage}
+    onCheckedChange={(v) => messagesPreferencesState.setNotifyOnMessage(v)}
+    label={isAndroid ? 'Notify me when a message arrives' : 'Alert me when a message arrives'}
+    disabled={!messagesPreferencesState.loaded || messagesPreferencesState.saving}
+  />
+  {#if isAndroid}
+    <p class="messages-hint">
+      Shows a notification like a text message. Sound and vibration are
+      controlled by the "Messages" channel in Android's notification settings.
+    </p>
+  {:else}
+    <p class="messages-hint">
+      Shows a desktop notification when your browser allows it; otherwise
+      plays a short chime. Alerts only fire while this page is open.
+    </p>
+    {#if notifyState === 'default'}
+      <Button variant="secondary" onclick={enableBrowserNotifications}>Enable desktop notifications</Button>
+    {:else if notifyState === 'granted'}
+      <p class="messages-hint">Desktop notifications are enabled.</p>
+    {:else if notifyState === 'denied'}
+      <p class="messages-hint">Desktop notifications are blocked in your browser settings for this site; a chime plays instead.</p>
+    {:else}
+      <p class="messages-hint">
+        Your browser only allows desktop notifications over HTTPS or on
+        localhost, so a chime plays instead.
+      </p>
+    {/if}
+  {/if}
 </Box>
 
 <Box title="Blocked call signs">

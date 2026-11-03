@@ -46,6 +46,7 @@ func (s *Server) registerMessages(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/messages/{id}", s.getMessage)
 	mux.HandleFunc("DELETE /api/messages/{id}", s.deleteMessage)
 	mux.HandleFunc("DELETE /api/messages/threads/{kind}/{key}", s.deleteMessageThread)
+	mux.HandleFunc("POST /api/messages/threads/{kind}/{key}/read", s.markMessageThreadRead)
 	mux.HandleFunc("POST /api/messages/{id}/read", s.markMessageRead)
 	mux.HandleFunc("POST /api/messages/{id}/unread", s.markMessageUnread)
 	mux.HandleFunc("POST /api/messages/{id}/resend", s.resendMessage)
@@ -409,6 +410,44 @@ func (s *Server) deleteMessageThread(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := svc.SoftDeleteThread(r.Context(), kind, key); err != nil {
 		s.internalError(w, r, "delete message thread", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// markMessageThreadRead clears the unread flag on every inbound message
+// of one thread. Idempotent: an empty or already-read thread is a 204.
+//
+// @Summary  Mark message thread read
+// @Tags     messages
+// @ID       markMessageThreadRead
+// @Param    kind path string true "Thread kind (dm | tactical)"
+// @Param    key  path string true "Thread key (peer callsign for DM, tactical label for tactical)"
+// @Success  204  "No Content"
+// @Failure  400  {object} webtypes.ErrorResponse
+// @Failure  500  {object} webtypes.ErrorResponse
+// @Failure  503  {object} webtypes.ErrorResponse
+// @Security CookieAuth
+// @Router   /messages/threads/{kind}/{key}/read [post]
+func (s *Server) markMessageThreadRead(w http.ResponseWriter, r *http.Request) {
+	svc, ok := s.requireMessagesSvc(w)
+	if !ok {
+		return
+	}
+	kind := strings.ToLower(strings.TrimSpace(r.PathValue("kind")))
+	key := strings.ToUpper(strings.TrimSpace(r.PathValue("key")))
+	switch kind {
+	case messages.ThreadKindDM, messages.ThreadKindTactical:
+	default:
+		badRequest(w, "kind must be dm or tactical")
+		return
+	}
+	if key == "" {
+		badRequest(w, "key is required")
+		return
+	}
+	if err := svc.MarkThreadRead(r.Context(), kind, key); err != nil {
+		s.internalError(w, r, "mark message thread read", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -837,6 +876,11 @@ func (s *Server) putMessagePreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	model := req.ToModel()
+	if req.NotifyOnMessage == nil {
+		if cur, _ := s.store.GetMessagePreferences(r.Context()); cur != nil {
+			model.NotificationsMuted = cur.NotificationsMuted
+		}
+	}
 	if err := s.store.UpsertMessagePreferences(r.Context(), &model); err != nil {
 		s.internalError(w, r, "upsert message preferences", err)
 		return

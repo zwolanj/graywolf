@@ -43,6 +43,7 @@ message PlatformMessage {
     BleScanStop ble_scan_stop = 30;
     BleRepairRequest ble_repair_request = 31;
     BleRepairAck ble_repair_ack = 32;
+    MessageNotification message_notification = 33;  // client → server, fire-and-forget
   }
 }
 
@@ -293,4 +294,14 @@ message BleRepairRequest {
 message BleRepairAck {
   bool   ok    = 1;
   string error = 2;
+}
+
+// New inbound APRS message; Kotlin posts an Android notification for it.
+// No ack: a dropped notification is not worth a retry.
+message MessageNotification {
+  string thread_kind = 1;  // "dm" | "tactical"
+  string thread_key  = 2;  // peer callsign or tactical label
+  string from_call   = 3;
+  string text        = 4;
+  uint64 message_id  = 5;
 }

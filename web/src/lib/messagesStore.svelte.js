@@ -9,9 +9,9 @@
 //   pendingByClientId  clientId -> optimistic outbound bubble (replaced on 202)
 //
 // The transport layer (messagesTransport.js) is the primary writer; the
-// UI reads reactively. The one UI-side write is adjustUnread(), which the
-// chat window uses to update unread counts optimistically on mark-read
-// (the transport's rollup poll reconciles any drift). Muted or archived threads are excluded from
+// UI reads reactively. The one UI-side write is clearUnread(), which the
+// Messages route uses to zero a thread's badge optimistically when it is
+// selected (the transport's rollup poll reconciles any drift). Muted or archived threads are excluded from
 // `unreadTotal` so the sidebar badge is an actionable, not merely
 // informational, signal.
 //
@@ -25,7 +25,6 @@
 // unread-total getter to recompute when individual threads change.
 
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { adjustUnread } from './unread-batch-core.js';
 
 /**
  * @typedef {object} Thread
@@ -279,18 +278,13 @@ class MessagesStore {
   }
 
   /**
-   * Adjust a thread's unreadCount locally (floor 0). The chat window
-   * calls this with a negative delta the moment it marks messages read,
-   * so the sidebar/top-bar dot updates immediately instead of waiting
-   * for the next refreshConversations() rollup (up to 30s), and with a
-   * positive delta to roll back a markRead that failed. Any residual
-   * drift self-heals on the next rollup.
+   * Zero a thread's unreadCount locally so the badge clears at once
+   * instead of waiting for the next refreshConversations() rollup.
    */
-  adjustUnread(threadId, delta) {
+  clearUnread(threadId) {
     const t = this.conversations.get(threadId);
-    if (!t) return;
-    const next = adjustUnread(t.unreadCount, delta);
-    if (next !== t.unreadCount) this.conversations.set(threadId, { ...t, unreadCount: next });
+    if (!t || !t.unreadCount) return;
+    this.conversations.set(threadId, { ...t, unreadCount: 0 });
   }
 
   // --- Selection (inbox bulk-delete) --------------------------------

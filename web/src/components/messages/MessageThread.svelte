@@ -1,7 +1,6 @@
 <script>
   // The right pane — shows a thread's bubbles, renders the sticky
-  // compose bar, owns the IntersectionObserver that marks inbound
-  // bubbles read.
+  // compose bar.
   //
   // Props:
   //   - thread        — store Thread (or null if nothing selected)
@@ -18,7 +17,7 @@
   //                     inside the thread because the user may not
   //                     be on the thread when the message lands.
 
-  import { onMount, tick } from 'svelte';
+  import { tick } from 'svelte';
   import { Button, EmptyState, Icon, ScrollArea } from '@chrissnell/chonky-ui';
   import ThreadHeader from './ThreadHeader.svelte';
   import MessageBubble from './MessageBubble.svelte';
@@ -33,10 +32,9 @@
   } from '../../lib/settings/messages-preferences-store.svelte.js';
   import { dayHeader, dayKey } from './time.js';
   import { messages as store } from '../../lib/messagesStore.svelte.js';
-  import { countByThread } from '../../lib/unread-batch-core.js';
   import { toasts } from '../../lib/stores.js';
   import {
-    listMessages, markRead, markUnread, resendMessage, abortMessage, deleteMessage,
+    listMessages, resendMessage, abortMessage, deleteMessage,
   } from '../../api/messages.js';
   import { refreshNow } from '../../lib/messagesTransport.js';
 
@@ -225,109 +223,6 @@
     }
   });
 
-  // --- IntersectionObserver: mark inbound messages as read on dwell.
-  /** @type {Map<number, number>} */
-  const dwellStart = new Map();
-  // id -> {kind, key, msg} taken from the message row itself, not from
-  // the `thread` prop: this component persists across thread switches, so
-  // the prop may already point at another thread when the batch flushes.
-  /** @type {Map<number, {kind: string, key: string, msg: any}>} */
-  const batchedIds = new Map();
-  let batchTimer = null;
-
-  function flushBatch() {
-    const entries = [...batchedIds];
-    batchedIds.clear();
-    batchTimer = null;
-    if (entries.length === 0) return;
-
-    // Update the unread count now rather than on the next 30s rollup;
-    // roll back any message whose markRead fails. The row's `unread`
-    // flag was cleared when it was batched, so restore it on failure.
-    const threadIdFor = (kind, key) => store.threadIdFor(kind, key);
-    for (const [tid, n] of countByThread(entries, threadIdFor)) store.adjustUnread(tid, -n);
-
-    Promise.allSettled(entries.map(([id]) => markRead(id))).then((results) => {
-      const failed = entries.filter((_, i) => results[i].status === 'rejected');
-      for (const [, t] of failed) if (t.msg) t.msg.unread = true;
-      for (const [tid, n] of countByThread(failed, threadIdFor)) store.adjustUnread(tid, n);
-    });
-  }
-
-  function scheduleFlush() {
-    if (batchTimer) return;
-    batchTimer = setTimeout(flushBatch, 2_000);
-  }
-
-  let io = null;
-  /** @type {Map<Element, any>} */
-  const bubbleByEl = new Map();
-
-  function rebuildIO() {
-    io?.disconnect?.();
-    if (!scrollEl) return;
-    const root = scrollEl.querySelector?.('[data-scroll-viewport]') || scrollEl;
-    io = new IntersectionObserver((entries) => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      for (const entry of entries) {
-        const m = bubbleByEl.get(entry.target);
-        if (!m || m.direction !== 'in' || !m.unread) continue;
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
-          if (!dwellStart.has(m.id)) dwellStart.set(m.id, Date.now());
-          const started = dwellStart.get(m.id) || 0;
-          setTimeout(() => {
-            if (!dwellStart.has(m.id)) return;
-            if (Date.now() - started < 500) return;
-            batchedIds.set(m.id, { kind: m.thread_kind, key: m.thread_key, msg: m });
-            // msgs is loaded once per thread visit, so clear the flag here or
-            // scrolling back over this row (or a tab-switch rebuildIO) would
-            // batch it again and lower the count a second time.
-            m.unread = false;
-            dwellStart.delete(m.id);
-            scheduleFlush();
-          }, 520);
-        } else {
-          dwellStart.delete(m.id);
-        }
-      }
-    }, { root, threshold: 0.6 });
-    for (const [el, m] of bubbleByEl) {
-      if (el && m) io.observe(el);
-    }
-  }
-
-  function observe(el, msg) {
-    if (!el || !msg) return;
-    bubbleByEl.set(el, msg);
-    io?.observe?.(el);
-  }
-  function unobserve(el) {
-    if (!el) return;
-    io?.unobserve?.(el);
-    bubbleByEl.delete(el);
-  }
-
-  onMount(() => {
-    rebuildIO();
-    const visHandler = () => {
-      if (document.visibilityState === 'visible') rebuildIO();
-    };
-    document.addEventListener('visibilitychange', visHandler);
-    return () => {
-      io?.disconnect?.();
-      document.removeEventListener('visibilitychange', visHandler);
-      if (batchTimer) {
-        clearTimeout(batchTimer);
-        flushBatch();
-      }
-    };
-  });
-
-  // Rebuild observer when scrollEl binds.
-  $effect(() => {
-    if (scrollEl) rebuildIO();
-  });
-
   // --- Send flow (wired to parent).
   async function handleSend(body, to) {
     await onCompose?.(body, to);
@@ -352,12 +247,6 @@
   async function onCopyText()  { try { await navigator.clipboard?.writeText?.(menuMsg?.text || ''); } catch {} }
   async function onCopyRaw()   { try { await navigator.clipboard?.writeText?.(menuMsg?.text || ''); } catch {} }
   async function onCopyCall()  { try { await navigator.clipboard?.writeText?.(menuMsg?.from_call || menuMsg?.to_call || ''); } catch {} }
-  async function onMarkUnread(){
-    if (menuMsg?.id != null) {
-      await markUnread(menuMsg.id).catch(() => {});
-      refreshNow();
-    }
-  }
   async function onResend()    {
     if (menuMsg?.id != null) {
       await resendMessage(menuMsg.id).catch(() => {});
@@ -484,7 +373,6 @@
                 onReplyPrivate={replyPrivately}
                 onContextMenu={openMenu}
                 onResend={resendDirect}
-                registerRef={(el, mounted) => (mounted ? observe(el, m) : unobserve(el))}
               />
             {/each}
           </div>
@@ -527,7 +415,6 @@
     {onCopyText}
     {onCopyRaw}
     {onCopyCall}
-    {onMarkUnread}
     {onResend}
     onAbort={onAbortMenu}
     onDelete={onDeleteMenu}

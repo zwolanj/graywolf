@@ -52,9 +52,9 @@ const (
 
 // Folder discriminator for List.
 const (
-	FolderAll    = "all"
-	FolderInbox  = "inbox"
-	FolderSent   = "sent"
+	FolderAll   = "all"
+	FolderInbox = "inbox"
+	FolderSent  = "sent"
 )
 
 // Sentinel errors surfaced to callers.
@@ -444,9 +444,9 @@ func (s *Store) UpdateSentAtAndAckState(ctx context.Context, id uint64, sentAt t
 func (s *Store) UpdateRetrySchedule(ctx context.Context, id uint64, attempts int, nextRetryAt *time.Time) error {
 	return s.db.WithContext(ctx).Model(&configstore.Message{}).
 		Where("id = ?", id).Updates(map[string]any{
-			"attempts":      attempts,
-			"next_retry_at": nextRetryAt,
-		}).Error
+		"attempts":      attempts,
+		"next_retry_at": nextRetryAt,
+	}).Error
 }
 
 // MarkRead clears Unread on the row.
@@ -459,6 +459,16 @@ func (s *Store) MarkRead(ctx context.Context, id uint64) error {
 func (s *Store) MarkUnread(ctx context.Context, id uint64) error {
 	return s.db.WithContext(ctx).Model(&configstore.Message{}).
 		Where("id = ?", id).Update("unread", true).Error
+}
+
+// MarkThreadRead clears Unread on every inbound row of one thread and
+// returns how many rows changed. Idempotent: an already-read or empty
+// thread is a no-op.
+func (s *Store) MarkThreadRead(ctx context.Context, kind, key string) (int64, error) {
+	res := s.db.WithContext(ctx).Model(&configstore.Message{}).
+		Where("thread_kind = ? AND thread_key = ? AND direction = ? AND unread = ?", kind, key, "in", true).
+		Update("unread", false)
+	return res.RowsAffected, res.Error
 }
 
 // ConversationSummary is one row per (thread_kind, thread_key) in the

@@ -51,7 +51,6 @@
    *    onReplyPrivate?: (fromCall: string) => void,
    *    onContextMenu?: (x: number, y: number, msg: any) => void,
    *    onResend?: (msg: any) => void,
-   *    registerRef?: (el: HTMLElement, mounted: boolean) => void,
    *  }}
    */
   let {
@@ -63,7 +62,6 @@
     onReplyPrivate,
     onContextMenu,
     onResend,
-    registerRef,
   } = $props();
 
   const isOut = $derived(msg?.direction === 'out');
@@ -152,16 +150,6 @@
   // which has no equivalent meaning for inbound (the receiver already got
   // the full frame if it's in the list).
   const showExtendedBadge = $derived(isOut && msg?.extended === true);
-
-  let bubbleEl = $state(null);
-  $effect(() => {
-    const el = bubbleEl;
-    if (!el) return;
-    registerRef?.(el, true);
-    // Pass the same element back on unmount so the parent can
-    // unobserve it and drop it from its element->message map.
-    return () => registerRef?.(el, false);
-  });
 
   function handleContextMenu(e) {
     if (!onContextMenu) return;
@@ -407,7 +395,6 @@
     {/if}
 
     <div
-      bind:this={bubbleEl}
       class="bubble"
       class:has-stripe={isTactical && !isOut}
       class:action-reply={actionReply && !isOut}

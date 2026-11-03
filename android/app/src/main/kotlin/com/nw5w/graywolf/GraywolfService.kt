@@ -32,6 +32,7 @@ import com.nw5w.graywolf.jni.ModemBridge
 import com.nw5w.graywolf.platformsvc.BleAdapter
 import com.nw5w.graywolf.platformsvc.BtSerialAdapter
 import com.nw5w.graywolf.platformsvc.BindContendedException
+import com.nw5w.graywolf.platformsvc.MessageNotifier
 import com.nw5w.graywolf.platformsvc.PlatformServer
 import com.nw5w.graywolf.platformsvc.SystemBleFacade
 import com.nw5w.graywolf.platformsvc.SystemBluetoothFacade
@@ -453,7 +454,7 @@ class GraywolfService : Service() {
             platformServer = PlatformServer(
                 socketPath = platformSocketPath(),
                 serverVersion = BuildConfig.VERSION_NAME,
-                schemaVersion = 4,
+                schemaVersion = 5,
             ).also { it.start() }
         } catch (e: BindContendedException) {
             // A previous instance still owns the platformsvc socket after the
@@ -503,6 +504,12 @@ class GraywolfService : Service() {
             ),
             sendMessage = { msg -> platformServer!!.broadcastBt(msg) },
         ).also { platformServer!!.attachUsbSerialAdapter(it) }
+
+        // Inbound-message notifications pushed by the Go child; suppressed
+        // while the Activity is in the foreground.
+        platformServer!!.attachMessageNotifier(
+            MessageNotifier(applicationContext) { MainActivity.isForeground }
+        )
 
         // USB enumeration provider for the unified PTT tab. The Go side
         // calls platformsvc.ListUsbDevices() when the operator opens the
