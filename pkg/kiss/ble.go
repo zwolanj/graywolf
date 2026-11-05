@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,7 +84,8 @@ func ScanBLEDevice(ctx context.Context, discovered func(BLEDevice)) error {
 		return fmt.Errorf("BLE: adapter enable: %w", err)
 	}
 
-	seen := make(map[string]bool)
+	dedup := newBLEScanDedup()
+	rssis := make(map[string]int16)
 	scanDone := make(chan error, 1)
 
 	go func() {
@@ -92,13 +94,14 @@ func ScanBLEDevice(ctx context.Context, discovered func(BLEDevice)) error {
 				return
 			}
 			addr := result.Address.String()
-			if seen[addr] {
+			name := result.LocalName()
+			if !dedup.shouldReport(addr, name) {
 				return
 			}
-			seen[addr] = true
+			rssis[addr] = result.RSSI
 			discovered(BLEDevice{
 				Addr: addr,
-				Name: result.LocalName(),
+				Name: name,
 				RSSI: result.RSSI,
 			})
 		})
@@ -111,12 +114,84 @@ func ScanBLEDevice(ctx context.Context, discovered func(BLEDevice)) error {
 		<-scanDone
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			// Timeout is the normal completion path; don't surface it as an error.
+			resolveBLENames(dedup.unnamed(), rssis, discovered)
 			return nil
 		}
 		return ctx.Err()
 	case err := <-scanDone:
 		return err
 	}
+}
+
+const (
+	bleNameResolveTimeout = 5 * time.Second
+	bleNameResolveMax     = 3
+)
+
+// resolveBLENames reads the GAP Device Name of devices that never showed a
+// name while scanning (CoreBluetooth reports scan-response data once, so a
+// name-less first sighting stays name-less) and reports each one again.
+func resolveBLENames(addrs []string, rssis map[string]int16, discovered func(BLEDevice)) {
+	if len(addrs) > bleNameResolveMax {
+		addrs = addrs[:bleNameResolveMax]
+	}
+	for _, addr := range addrs {
+		if name := readBLEDeviceName(addr); name != "" {
+			discovered(BLEDevice{Addr: addr, Name: name, RSSI: rssis[addr]})
+		}
+	}
+}
+
+// readBLEDeviceName connects briefly and reads GAP Device Name (0x2A00).
+// Returns "" on any failure; the caller keeps the name-less entry.
+func readBLEDeviceName(addr string) string {
+	var bleAddr bluetooth.Address
+	bleAddr.Set(addr)
+
+	type connResult struct {
+		device bluetooth.Device
+		err    error
+	}
+	connCh := make(chan connResult, 1)
+	go func() {
+		d, err := bluetooth.DefaultAdapter.Connect(bleAddr, bluetooth.ConnectionParams{
+			ConnectionTimeout: bluetooth.NewDuration(bleNameResolveTimeout),
+		})
+		connCh <- connResult{d, err}
+	}()
+
+	var device bluetooth.Device
+	select {
+	case r := <-connCh:
+		if r.err != nil {
+			return ""
+		}
+		device = r.device
+	case <-time.After(bleNameResolveTimeout):
+		// Connect may still complete after the deadline; don't leak the link.
+		go func() {
+			if r := <-connCh; r.err == nil {
+				_ = r.device.Disconnect()
+			}
+		}()
+		return ""
+	}
+	defer func() { _ = device.Disconnect() }()
+
+	svcs, err := device.DiscoverServices([]bluetooth.UUID{bluetooth.ServiceUUIDGenericAccess})
+	if err != nil || len(svcs) == 0 {
+		return ""
+	}
+	chars, err := svcs[0].DiscoverCharacteristics([]bluetooth.UUID{bluetooth.CharacteristicUUIDDeviceName})
+	if err != nil || len(chars) == 0 {
+		return ""
+	}
+	buf := make([]byte, 64)
+	n, err := chars[0].Read(buf)
+	if err != nil || n <= 0 {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimRight(string(buf[:n]), "\x00"))
 }
 
 // bleProfile holds the resolved service and GATT characteristic UUIDs

@@ -1786,6 +1786,12 @@ definitions:
         type: boolean
       mode:
         type: string
+      name:
+        description: |-
+          Name is the operator-visible label. Blank on create selects the
+          generated default (see DefaultKissName); blank on update keeps the
+          stored name.
+        type: string
       reconnect_init_ms:
         type: integer
       reconnect_max_ms:
@@ -1856,6 +1862,8 @@ definitions:
           listens on loopback only. Derived from the ListenAddr host.
         type: boolean
       mode:
+        type: string
+      name:
         type: string
       needs_reconfig:
         type: boolean
@@ -6144,6 +6152,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/webtypes.ErrorResponse'
+        "409":
+          description: name already in use
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -6231,6 +6243,10 @@ paths:
             $ref: '#/definitions/dto.KissResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+        "409":
+          description: name already in use
           schema:
             $ref: '#/definitions/webtypes.ErrorResponse'
         "500":

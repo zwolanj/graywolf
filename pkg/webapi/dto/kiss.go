@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/chrissnell/graywolf/pkg/configstore"
 	"github.com/chrissnell/graywolf/pkg/kiss"
@@ -18,6 +21,9 @@ import (
 const (
 	maxTncIngressRateHz = 10000
 	maxTncIngressBurst  = 100000
+
+	// MaxKissNameLen bounds the operator-chosen interface name (runes).
+	MaxKissNameLen = 64
 )
 
 // KissRequest is the body accepted by POST /api/kiss and
@@ -30,7 +36,11 @@ const (
 // rejects obviously-wrong non-zero values up front so the error lands
 // at the API boundary instead of the SQLite boundary.
 type KissRequest struct {
-	Type    string `json:"type"`
+	Type string `json:"type"`
+	// Name is the operator-visible label. Blank on create selects the
+	// generated default (see DefaultKissName); blank on update keeps the
+	// stored name.
+	Name    string `json:"name,omitempty"`
 	TcpPort int    `json:"tcp_port"`
 	// LocalOnly, when set on a tcp (server-listen) interface, binds the
 	// KISS listener to loopback (127.0.0.1) instead of all interfaces
@@ -109,6 +119,11 @@ const (
 func (r KissRequest) Validate() error {
 	if !configstore.ValidKissInterfaceType(r.Type) {
 		return fmt.Errorf("type must be tcp, tcp-client, serial, bluetooth, or usbserial")
+	}
+	if name := strings.TrimSpace(r.Name); utf8.RuneCountInString(name) > MaxKissNameLen {
+		return fmt.Errorf("name must be at most %d characters", MaxKissNameLen)
+	} else if strings.IndexFunc(name, unicode.IsControl) >= 0 {
+		return fmt.Errorf("name must not contain control characters")
 	}
 	switch r.LinkWatchdog {
 	case "", kiss.LinkWatchdogAuto, kiss.LinkWatchdogOn, kiss.LinkWatchdogOff:
@@ -266,27 +281,42 @@ func (r KissRequest) ToModel() configstore.KissInterface {
 		ReconnectInitMs:     initMs,
 		ReconnectMaxMs:      maxMs,
 	}
-	switch r.Type {
-	case configstore.KissTypeTCP:
-		if r.TcpPort > 0 {
-			host := "0.0.0.0"
-			if r.LocalOnly {
-				host = "127.0.0.1"
-			}
-			ki.ListenAddr = fmt.Sprintf("%s:%d", host, r.TcpPort)
-			ki.Name = fmt.Sprintf("kiss-tcp-%d", r.TcpPort)
+	if r.Type == configstore.KissTypeTCP && r.TcpPort > 0 {
+		host := "0.0.0.0"
+		if r.LocalOnly {
+			host = "127.0.0.1"
 		}
-	case configstore.KissTypeTCPClient:
-		// Name encodes the dial target so a Grafana alert on a
-		// specific interface is human-readable without cross-referencing
-		// the DB row ID. Truncation not needed — hostnames are bounded.
-		ki.Name = fmt.Sprintf("kiss-tcp-client-%s-%d", r.RemoteHost, r.RemotePort)
-	default:
-		if r.SerialDevice != "" {
-			ki.Name = fmt.Sprintf("kiss-serial-%s", r.SerialDevice)
-		}
+		ki.ListenAddr = fmt.Sprintf("%s:%d", host, r.TcpPort)
+	}
+	if name := strings.TrimSpace(r.Name); name != "" {
+		ki.Name = name
+	} else {
+		ki.Name = DefaultKissName(ki)
 	}
 	return ki
+}
+
+// DefaultKissName is the generated name used when the operator supplies
+// none. For tcp the port comes from ListenAddr; tcp-client encodes the dial
+// target so alerts on a specific interface are readable without the row ID.
+// Returns "" when the model lacks the fields the name is built from.
+func DefaultKissName(m configstore.KissInterface) string {
+	switch m.InterfaceType {
+	case configstore.KissTypeTCP:
+		if _, portStr, err := net.SplitHostPort(m.ListenAddr); err == nil {
+			if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
+				return fmt.Sprintf("kiss-tcp-%d", p)
+			}
+		}
+		return ""
+	case configstore.KissTypeTCPClient:
+		return fmt.Sprintf("kiss-tcp-client-%s-%d", m.RemoteHost, m.RemotePort)
+	default:
+		if m.Device != "" {
+			return fmt.Sprintf("kiss-serial-%s", m.Device)
+		}
+		return ""
+	}
 }
 
 // KissEnabledRequest is the body for PUT /api/kiss/{id}/enabled — a
@@ -317,6 +347,7 @@ func (r KissRequest) ToUpdate(id uint32) configstore.KissInterface {
 // nulled by a Phase 5 cascade delete.
 type KissResponse struct {
 	ID      uint32 `json:"id"`
+	Name    string `json:"name"`
 	Type    string `json:"type"`
 	TcpPort int    `json:"tcp_port"`
 	// LocalOnly mirrors KissRequest.LocalOnly: true when a tcp interface
@@ -387,6 +418,7 @@ func isLoopbackHost(host string) bool {
 func KissFromModel(m configstore.KissInterface) KissResponse {
 	out := KissResponse{
 		ID:                  m.ID,
+		Name:                m.Name,
 		Type:                m.InterfaceType,
 		SerialDevice:        m.Device,
 		BaudRate:            m.BaudRate,

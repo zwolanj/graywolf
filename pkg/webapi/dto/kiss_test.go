@@ -596,3 +596,42 @@ func TestKissRequest_LinkWatchdog_ModelRoundtrip(t *testing.T) {
 		t.Fatalf("KissFromModel = %q/%d", resp.LinkWatchdog, resp.IdleReconnectSec)
 	}
 }
+
+func TestKissRequest_Name(t *testing.T) {
+	t.Run("blank name uses generated default", func(t *testing.T) {
+		cases := []struct {
+			req  KissRequest
+			want string
+		}{
+			{KissRequest{Type: "tcp", TcpPort: 8001}, "kiss-tcp-8001"},
+			{KissRequest{Type: "tcp-client", RemoteHost: "h", RemotePort: 9}, "kiss-tcp-client-h-9"},
+			{KissRequest{Type: "ble-device", SerialDevice: "AA-BB"}, "kiss-serial-AA-BB"},
+		}
+		for _, c := range cases {
+			if got := c.req.ToModel().Name; got != c.want {
+				t.Errorf("%s: Name=%q, want %q", c.req.Type, got, c.want)
+			}
+		}
+	})
+	t.Run("supplied name is trimmed and used", func(t *testing.T) {
+		m := KissRequest{Type: "ble-device", SerialDevice: "AA-BB", Name: "  B.B. Link Atom "}.ToModel()
+		if m.Name != "B.B. Link Atom" {
+			t.Errorf("Name=%q", m.Name)
+		}
+	})
+	t.Run("validation", func(t *testing.T) {
+		base := KissRequest{Type: "tcp", TcpPort: 8001}
+		base.Name = strings.Repeat("x", MaxKissNameLen+1)
+		if err := base.Validate(); err == nil {
+			t.Error("over-long name accepted")
+		}
+		base.Name = "bad\nname"
+		if err := base.Validate(); err == nil {
+			t.Error("control character accepted")
+		}
+		base.Name = strings.Repeat("x", MaxKissNameLen)
+		if err := base.Validate(); err != nil {
+			t.Errorf("max-length name rejected: %v", err)
+		}
+	})
+}

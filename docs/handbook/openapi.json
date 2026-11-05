@@ -4244,6 +4244,12 @@
                             "$ref": "#/definitions/webtypes.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "name already in use",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -4486,6 +4492,12 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "name already in use",
                         "schema": {
                             "$ref": "#/definitions/webtypes.ErrorResponse"
                         }
@@ -11126,6 +11138,10 @@
                 "mode": {
                     "type": "string"
                 },
+                "name": {
+                    "description": "Name is the operator-visible label. Blank on create selects the\ngenerated default (see DefaultKissName); blank on update keeps the\nstored name.",
+                    "type": "string"
+                },
                 "reconnect_init_ms": {
                     "type": "integer"
                 },
@@ -11211,6 +11227,9 @@
                     "type": "boolean"
                 },
                 "mode": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 },
                 "needs_reconfig": {

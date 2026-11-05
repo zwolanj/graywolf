@@ -3201,6 +3201,12 @@ export interface components {
              */
             local_only?: boolean;
             mode?: string;
+            /**
+             * @description Name is the operator-visible label. Blank on create selects the
+             *     generated default (see DefaultKissName); blank on update keeps the
+             *     stored name.
+             */
+            name?: string;
             reconnect_init_ms?: number;
             reconnect_max_ms?: number;
             /**
@@ -3249,6 +3255,7 @@ export interface components {
              */
             local_only?: boolean;
             mode?: string;
+            name?: string;
             needs_reconfig?: boolean;
             peer_addr?: string;
             reconnect_count?: number;
@@ -8000,6 +8007,15 @@ export interface operations {
                     "application/json": components["schemas"]["webtypes.ErrorResponse"];
                 };
             };
+            /** @description name already in use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -8210,6 +8226,15 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+            /** @description name already in use */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

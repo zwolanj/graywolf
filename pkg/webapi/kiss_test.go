@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -914,4 +915,120 @@ func fetchList(t *testing.T, mux *http.ServeMux) []dto.KissResponse {
 		t.Fatalf("decode list: %v", err)
 	}
 	return list
+}
+
+// kissDo issues a JSON request against mux and returns the recorder.
+func kissDo(mux *http.ServeMux, method, path string, body map[string]any) *httptest.ResponseRecorder {
+	raw, _ := json.Marshal(body)
+	req := httptest.NewRequest(method, path, bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestKissName_CreateRenameConflict(t *testing.T) {
+	srv, _ := newTestServer(t)
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+
+	decode := func(t *testing.T, rec *httptest.ResponseRecorder) dto.KissResponse {
+		t.Helper()
+		var r dto.KissResponse
+		if err := json.NewDecoder(rec.Body).Decode(&r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+
+	// Blank name on create keeps the generated default.
+	rec := kissDo(mux, http.MethodPost, "/api/kiss", map[string]any{"type": "tcp", "tcp_port": 22001, "channel": 1})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	auto := decode(t, rec)
+	if auto.Name != "kiss-tcp-22001" {
+		t.Errorf("default name = %q", auto.Name)
+	}
+
+	// An explicit name on create is honored.
+	rec = kissDo(mux, http.MethodPost, "/api/kiss", map[string]any{"type": "tcp", "tcp_port": 22002, "channel": 1, "name": "Home TNC"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create named: %d %s", rec.Code, rec.Body.String())
+	}
+	named := decode(t, rec)
+	if named.Name != "Home TNC" {
+		t.Errorf("name = %q", named.Name)
+	}
+
+	// Duplicate name -> 409 on create and on update.
+	rec = kissDo(mux, http.MethodPost, "/api/kiss", map[string]any{"type": "tcp", "tcp_port": 22003, "channel": 1, "name": "Home TNC"})
+	if rec.Code != http.StatusConflict {
+		t.Errorf("duplicate create = %d, want 409 (%s)", rec.Code, rec.Body.String())
+	}
+	rec = kissDo(mux, http.MethodPut, "/api/kiss/"+itoa(auto.ID), map[string]any{"type": "tcp", "tcp_port": 22001, "channel": 1, "name": "Home TNC"})
+	if rec.Code != http.StatusConflict {
+		t.Errorf("duplicate rename = %d, want 409 (%s)", rec.Code, rec.Body.String())
+	}
+
+	// Rename: persists, and a later PUT without a name keeps it.
+	rec = kissDo(mux, http.MethodPut, "/api/kiss/"+itoa(auto.ID), map[string]any{"type": "tcp", "tcp_port": 22001, "channel": 1, "name": "Garage"})
+	if rec.Code != http.StatusOK || decode(t, rec).Name != "Garage" {
+		t.Fatalf("rename: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = kissDo(mux, http.MethodPut, "/api/kiss/"+itoa(auto.ID), map[string]any{"type": "tcp", "tcp_port": 22001, "channel": 1, "mode": "tnc"})
+	if rec.Code != http.StatusOK || decode(t, rec).Name != "Garage" {
+		t.Errorf("name not preserved on blank-name PUT: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Auto-generated names follow a port change.
+	rec = kissDo(mux, http.MethodPut, "/api/kiss/"+itoa(named.ID), map[string]any{"type": "tcp", "tcp_port": 22002, "channel": 1, "name": "kiss-tcp-22002"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reset to auto name: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = kissDo(mux, http.MethodPut, "/api/kiss/"+itoa(named.ID), map[string]any{"type": "tcp", "tcp_port": 22004, "channel": 1})
+	if rec.Code != http.StatusOK || decode(t, rec).Name != "kiss-tcp-22004" {
+		t.Errorf("auto name did not follow port: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// A rename-only PUT must leave the running supervisor alone so the live
+// link (e.g. BLE) is not dropped to change a label.
+func TestKissRename_DoesNotRestartSupervisor(t *testing.T) {
+	srv, mgr, mux := newSerialTestServer(t)
+	var opens atomic.Int32
+	srv.kissSerialOpenFunc = func(string, uint32) (io.ReadWriteCloser, error) {
+		opens.Add(1)
+		return newBlockingRWC(), nil
+	}
+
+	body := map[string]any{"type": "serial", "serial_device": "/dev/ttyTEST0", "baud_rate": 9600, "channel": 1, "mode": "modem"}
+	create := kissDo(mux, http.MethodPost, "/api/kiss", body)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", create.Code, create.Body.String())
+	}
+	var created dto.KissResponse
+	if err := json.NewDecoder(create.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if !pollRegistered(mgr, created.ID, time.Now().Add(2*time.Second)) {
+		t.Fatal("serial interface never registered")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for opens.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if opens.Load() != 1 {
+		t.Fatalf("opens after create = %d, want 1", opens.Load())
+	}
+
+	body["name"] = "Radio"
+	rec := kissDo(mux, http.MethodPut, "/api/kiss/"+itoa(created.ID), body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rename: %d %s", rec.Code, rec.Body.String())
+	}
+	time.Sleep(100 * time.Millisecond)
+	if got := opens.Load(); got != 1 {
+		t.Errorf("rename reopened the device: opens = %d, want 1", got)
+	}
 }

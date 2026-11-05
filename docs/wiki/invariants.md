@@ -2287,3 +2287,26 @@ gated copy within ~30 s of APRS-IS dedup is credited, and its "first heard"
 algorithm refuses to count a packet as direct when unsure (user guide,
 `aprsfi-info-pages`). When debugging a missing credit, first confirm the upload
 by listening on APRS-IS with `filter b/<CALL>` and looking for `,qAR,<yourcall>:`.
+
+### 73. A KISS interface name is a label, not an identity; renaming must not touch the live link
+
+`KissInterface.Name` (unique) is exposed as `name` on `dto.KissRequest` /
+`KissResponse`. The manager, TX backends, and channel referrers key on the row
+`ID` and the device address, never on `Name`, so a rename is safe at any time.
+
+- Blank on create: `dto.KissRequest.ToModel` falls back to `dto.DefaultKissName`
+  (`kiss-tcp-<port>`, `kiss-tcp-client-<host>-<port>`, `kiss-serial-<device>`).
+  The UI instead sends the selected BLE/Bluetooth device's name when it has one.
+- Blank on update: `updateKiss` keeps the stored name, unless the stored name
+  equals the generated default of the old config -- then it follows the new
+  port/device.
+- A PUT whose only change is the name is persisted without `notifyKissManager`,
+  so a serial/BLE link is not dropped to change a label (metrics/log labels
+  pick up the new name at the next supervisor restart).
+- Duplicate names return 409 (`conflictError` in `pkg/webapi/handlers.go`).
+- BLE scan names: the B.B. Link style firmware puts its name in the scan
+  response, which CoreBluetooth reports once. `kiss.ScanBLEDevice` therefore
+  re-emits a device when a name first arrives, and after the scan reads the GAP
+  Device Name (0x2A00) of up to 3 still-nameless devices
+  ([`../../pkg/kiss/ble.go`](../../pkg/kiss/ble.go)); the SPA merges repeats by
+  address.

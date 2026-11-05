@@ -2,8 +2,13 @@ package webapi
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/chrissnell/graywolf/pkg/configstore"
 	"github.com/chrissnell/graywolf/pkg/kiss"
@@ -96,6 +101,7 @@ func (s *Server) listKiss(w http.ResponseWriter, r *http.Request) {
 // @Param    body body     dto.KissRequest true "KISS interface definition"
 // @Success  201  {object} dto.KissResponse
 // @Failure  400  {object} webtypes.ErrorResponse
+// @Failure  409  {object} webtypes.ErrorResponse "name already in use"
 // @Failure  500  {object} webtypes.ErrorResponse
 // @Security CookieAuth
 // @Router   /kiss [post]
@@ -107,12 +113,21 @@ func (s *Server) createKiss(w http.ResponseWriter, r *http.Request) {
 			}
 			m := req.ToModel()
 			if err := s.store.CreateKissInterface(ctx, &m); err != nil {
-				return configstore.KissInterface{}, err
+				return configstore.KissInterface{}, kissNameConflict(err, m.Name)
 			}
 			s.notifyKissManager(m)
 			return m, nil
 		},
 		dto.KissFromModel)
+}
+
+// kissNameConflict maps a unique-name violation to a 409 the handlers
+// surface verbatim; other errors pass through unchanged.
+func kissNameConflict(err error, name string) error {
+	if isUniqueConstraintErr(err) {
+		return conflictError(fmt.Errorf("a KISS interface named %q already exists; enter a different name", name))
+	}
+	return err
 }
 
 // getKiss returns the KISS interface with the given id.
@@ -154,6 +169,7 @@ func (s *Server) getKiss(w http.ResponseWriter, r *http.Request) {
 // @Param    body body     dto.KissRequest true "KISS interface definition"
 // @Success  200  {object} dto.KissResponse
 // @Failure  400  {object} webtypes.ErrorResponse
+// @Failure  409  {object} webtypes.ErrorResponse "name already in use"
 // @Failure  500  {object} webtypes.ErrorResponse
 // @Security CookieAuth
 // @Router   /kiss/{id} [put]
@@ -169,6 +185,18 @@ func (s *Server) updateKiss(w http.ResponseWriter, r *http.Request) {
 				return configstore.KissInterface{}, validationError(err)
 			}
 			m := req.ToUpdate(id)
+			existing, err := s.store.GetKissInterface(ctx, id)
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return configstore.KissInterface{}, err
+			}
+			if existing == nil {
+				existing = &configstore.KissInterface{}
+			}
+			// A blank name keeps the stored one, unless the stored name was
+			// auto-generated, in which case it follows the new device/port.
+			if strings.TrimSpace(req.Name) == "" && existing.Name != "" && existing.Name != dto.DefaultKissName(*existing) {
+				m.Name = existing.Name
+			}
 			// When the operator reassigns a valid channel, clear the
 			// cascade-set NeedsReconfig flag so the "reconfigure me"
 			// banner drops off the row (D12). Zero stays flagged until
@@ -176,8 +204,29 @@ func (s *Server) updateKiss(w http.ResponseWriter, r *http.Request) {
 			if m.Channel != 0 {
 				m.NeedsReconfig = false
 			}
+			// Rename-only edits must not restart the supervisor: that would
+			// drop a live serial/BLE link just to change a label.
+			nameOnly := m
+			nameOnly.Name = existing.Name
+			nameOnly.CreatedAt, nameOnly.UpdatedAt = existing.CreatedAt, existing.UpdatedAt
+			// The store fills these defaults on save; mirror that so an
+			// omitted rate doesn't look like a change.
+			if nameOnly.TncIngressRateHz == 0 {
+				nameOnly.TncIngressRateHz = configstore.DefaultTncIngressRateHz
+			}
+			if nameOnly.TncIngressBurst == 0 {
+				nameOnly.TncIngressBurst = configstore.DefaultTncIngressBurst
+			}
+			if existing.ID != 0 && m.Name != existing.Name && nameOnly == *existing {
+				renamed := *existing
+				renamed.Name = m.Name
+				if err := s.store.UpdateKissInterface(ctx, &renamed); err != nil {
+					return configstore.KissInterface{}, kissNameConflict(err, m.Name)
+				}
+				return renamed, nil
+			}
 			if err := s.store.UpdateKissInterface(ctx, &m); err != nil {
-				return configstore.KissInterface{}, err
+				return configstore.KissInterface{}, kissNameConflict(err, m.Name)
 			}
 			s.notifyKissManager(m)
 			return m, nil

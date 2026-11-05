@@ -47,6 +47,28 @@ func isValidationErr(err error) error {
 	return nil
 }
 
+// conflictErr marks an error that handleCreate / handleUpdate should
+// surface as HTTP 409 (e.g. a duplicate name) instead of a 500.
+type conflictErr struct{ err error }
+
+func (c conflictErr) Error() string { return c.err.Error() }
+func (c conflictErr) Unwrap() error { return c.err }
+
+func conflictError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return conflictErr{err: err}
+}
+
+func isConflictErr(err error) error {
+	var c conflictErr
+	if errors.As(err, &c) {
+		return c.err
+	}
+	return nil
+}
+
 // decodeJSON reads a JSON request body into T and rejects any unknown
 // fields. Handlers route every request decode through this helper so
 // the API contract fails loudly when a client sends a misspelled or
@@ -137,6 +159,10 @@ func handleCreate[TReq dto.Validator, TModel any, TResp any](
 			badRequest(w, v.Error())
 			return
 		}
+		if c := isConflictErr(err); c != nil {
+			conflict(w, c.Error())
+			return
+		}
 		s.internalError(w, r, op, err)
 		return
 	}
@@ -168,6 +194,10 @@ func handleUpdate[TReq dto.Validator, TModel any, TResp any](
 	if err != nil {
 		if v := isValidationErr(err); v != nil {
 			badRequest(w, v.Error())
+			return
+		}
+		if c := isConflictErr(err); c != nil {
+			conflict(w, c.Error())
 			return
 		}
 		s.internalError(w, r, op, err)

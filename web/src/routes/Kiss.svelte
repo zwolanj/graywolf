@@ -153,7 +153,7 @@
   let bleDeviceOptions = $derived(
     bleDevices.map((d) => ({
       value: d.addr,
-      label: d.name ? `${d.name} (${d.addr})` : d.addr,
+      label: d.name ? `${d.name} (${d.addr})` : `Unnamed BLE device (${d.addr})`,
     }))
   );
 
@@ -325,8 +325,37 @@
 
   const modeLabels = { modem: 'Modem', tnc: 'TNC' };
 
+  // Name of the device picked in the form (BLE scan result or bonded
+  // Bluetooth device); '' when the type has no named device.
+  let selectedDeviceName = $derived(
+    form.type === 'ble-device'
+      ? bleDevices.find((d) => d.addr === form.serial_device)?.name || ''
+      : form.type === 'bluetooth'
+        ? bondedDevices.find((d) => d.mac === form.serial_device)?.name || ''
+        : '',
+  );
+
+  // Mirrors the server's generated default (dto.DefaultKissName).
+  let generatedNamePreview = $derived.by(() => {
+    switch (form.type) {
+      case 'tcp':
+        return form.tcp_port ? `kiss-tcp-${form.tcp_port}` : '';
+      case 'tcp-client':
+        return `kiss-tcp-client-${(form.remote_host || '').trim()}-${form.remote_port || 0}`;
+      default:
+        return form.serial_device ? `kiss-serial-${form.serial_device}` : '';
+    }
+  });
+
+  let namePlaceholder = $derived(
+    editing?.name || selectedDeviceName || generatedNamePreview || 'Auto-generated',
+  );
+
   function emptyForm() {
     return {
+      // Optional label. Blank on create saves the selected device's name
+      // (or the server-generated default when no device name is known).
+      name: '',
       type: 'tcp',
       tcp_port: TCP_PORT_DEFAULT,
       // tcp (server) bind scope: false => listen on all interfaces
@@ -565,9 +594,13 @@
     source.onmessage = (e) => {
       try {
         const dev = JSON.parse(e.data);
-        // Deduplicate in case the server sends the same addr twice.
-        if (!bleDevices.some((d) => d.addr === dev.addr)) {
+        // The server re-sends a device when its name arrives late, so
+        // merge by address instead of ignoring repeats.
+        const i = bleDevices.findIndex((d) => d.addr === dev.addr);
+        if (i < 0) {
           bleDevices = [...bleDevices, dev];
+        } else if (dev.name && dev.name !== bleDevices[i].name) {
+          bleDevices = bleDevices.map((d, j) => (j === i ? { ...d, ...dev } : d));
         }
       } catch {
         // malformed JSON from server — ignore
@@ -750,33 +783,21 @@
     }
   }
 
-  // Auto-fill a friendly slug name when the operator picks a bonded
-  // device. Only overwrites empty names or names that look like a
-  // previous auto-fill (kiss-bt-*) so manually-named interfaces are
-  // preserved on re-pick. The form/DTO doesn't model a name field
-  // today, but interfaces carry .name server-side (used in the
-  // NeedsReconfig banner); leaving the helper in place means a
-  // future name input wires up for free.
-  function autofillBtName() {
-    if (!form.serial_device) return;
-    // Operator just picked a device — clear any "pick a device first"
-    // validation error so it doesn't linger as visual noise.
-    saveError = '';
-    const d = bondedDevices.find((x) => x.mac === form.serial_device);
-    if (!d) return;
-    const slug = d.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    const autoName = `kiss-bt-${slug}`;
-    if (!form.name || (typeof form.name === 'string' && form.name.startsWith('kiss-bt-'))) {
-      form.name = autoName;
-    }
+  // Clears the "pick a device first" validation error once a device is chosen.
+  function clearBondedError() {
+    if (form.serial_device) saveError = '';
   }
 
   function buildPayload() {
+    // Edit: send a name only when changed; blank lets the server keep the
+    // stored one. Create: fall back to the selected device's name.
+    const typedName = (form.name || '').trim();
+    const name = editing
+      ? (typedName === (editing.name || '') ? '' : typedName)
+      : (typedName || selectedDeviceName);
     const data = {
       type: form.type,
+      ...(name ? { name } : {}),
       channel: parseInt(form.channel) || 1,
       mode: form.mode,
       tnc_ingress_rate_hz: parseInt(form.tnc_ingress_rate_hz) || 0,
@@ -936,7 +957,7 @@
       // Show friendly name if the device was discovered in this session.
       const dev = bleDevices.find((d) => d.addr === (row.serial_device || row.device));
       const addr = row.serial_device || row.device || '';
-      return dev ? `${dev.name} (${addr})` : addr || '—';
+      return dev?.name ? `${dev.name} (${addr})` : addr || '—';
     }
     return '—';
   }
@@ -1109,6 +1130,7 @@
 {/snippet}
 
 {#snippet endpointCell(_value, row)}
+  {#if row.name}<div class="endpoint-name">{row.name}</div>{/if}
   <span class="endpoint">{endpointText(row)}</span>
 {/snippet}
 
@@ -1222,6 +1244,13 @@
 {/snippet}
 
 <Modal bind:open={modalOpen} title={editing ? 'Edit KISS' : 'New KISS Interface'}>
+    <FormField
+      label="Name"
+      id="kiss-name"
+      hint="Optional. Shown in the interface list and in logs; the device connection is not affected by renaming. Leave blank to use the placeholder name."
+    >
+      <Input id="kiss-name" bind:value={form.name} placeholder={namePlaceholder} maxlength={64} />
+    </FormField>
     {#if form.type !== 'bluetooth' && form.type !== 'ble-device'}
       <FormField label="Mode" id="kiss-mode" hint={modeHint}>
         {#snippet children(describedBy)}
@@ -1280,7 +1309,7 @@
               bind:value={form.serial_device}
               options={bondedDeviceOptions}
               placeholder={bondedLoading ? 'Loading…' : 'Select a bonded device'}
-              onValueChange={autofillBtName}
+              onValueChange={clearBondedError}
               aria-describedby={describedBy}
             />
             <Button variant="secondary" onclick={loadBondedDevices} disabled={bondedLoading}>
@@ -1596,6 +1625,9 @@
   .endpoint {
     font-family: var(--font-mono, monospace);
     font-size: 13px;
+  }
+  .endpoint-name {
+    font-weight: 600;
   }
   .status-cell {
     display: flex;
